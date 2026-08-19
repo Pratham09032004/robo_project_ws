@@ -1,6 +1,63 @@
 build/
 install/
 log/
-src/dataset/
+*.png
 __pycache__/
+*.pt
+*.pth
+*.py
+*.sh
+*.glb
+*.navmesh
+COLCON_IGNORE
+
 *.pyc
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+*.env
+.venv/
+env/
+
+install/*/lib/**/*
+
+*.pt
+*.pth
+
+# ===== 3D assets / meshes (often large) =====
+*.stl
+*.glb
+*.dae
+*.obj
+*.mtl
+*.navmesh
+
+# ===== Data / arrays =====
+*.npy
+
+# ===== Logs, temp, backups =====
+*.log
+*.stamp
+*.swp
+*.out
+*.last
+*.marks
+*.built_by
+*.pack
+backup_before_*
+
+# ===== Shell / env configs (often user-specific) =====
+*.rc
+
+# ===== Archives (share via Drive instead) =====
+*.zip
+
+# ===== Editor/OS junk =====
+.vscode/
+.idea/
+*.DS_Store
+
+# ===== conda env exports (keep environment.yml if you use one, ignore the folder itself) =====
+conda_env/
+envs/

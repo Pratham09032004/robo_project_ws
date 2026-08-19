@@ -39,7 +39,7 @@ measurements:
 map:
   fname: "exp120_v1.png"
   desired_meters_per_pixel: 0.05
-  obstacle_balloon_radius: 0
+  obstacle_balloon_radius: 1
   show_images_during_pre_proc: false  # CHANGED: prevent hanging on startup
 
 observation:

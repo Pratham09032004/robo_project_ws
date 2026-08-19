@@ -3,89 +3,84 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
-from geometry_msgs.msg import Twist, Point
-from sensor_msgs.msg import Image, LaserScan
-from nav_msgs.msg import Odometry
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 
-import yaml, os, time
+from geometry_msgs.msg import Twist, PoseStamped, TransformStamped
+from nav_msgs.msg import Odometry, OccupancyGrid, Path
+from tf2_ros import TransformBroadcaster
+
+import yaml, os, time, math
 from ament_index_python.packages import get_package_share_directory
-from cv_bridge import CvBridge
-from math import atan2
 import numpy as np
-import cv2
-from time import strftime
-from typing import Callable
 
-from robo_project.scripts.cmn_interface import CoarseMapNavInterface, CmnConfig
-from robo_project.scripts.basic_types import PoseMeters, PosePixels, rotate_image_to_north
-from robo_project import locobot_interface
-
-TOPIC_CMD_VEL = '/cmd_vel'
-TOPIC_ODOM    = '/odom'
-TOPIC_CAMERA  = '/camera/front/image_raw'
-TOPIC_LIDAR   = '/scan'
+from robo_project.scripts.map_handler import MapFrameManager
+from robo_project.scripts.basic_types import PoseMeters, PosePixels
 
 class RunnerNode(Node):
     def __init__(self):
         super().__init__('runner_node')
 
-        self.cv_bridge = CvBridge()
-        self.cmn_interface: CoarseMapNavInterface = None
+        print("\n" + "="*50, flush=True)
+        print("🚀 RUNNER NODE INITIALIZING (NO ML / NO LOCALIZATION)...", flush=True)
+        print("="*50 + "\n", flush=True)
 
-        self.most_recent_rgb_meas = None
-        self.most_recent_depth_meas = None
-        self.desired_meas_shape = None
-        self.depth_proc_func: Callable = None
+        self.mfm = None
 
-        self.first_odom: PoseMeters = None
-        self.ml_estimated_pose: PoseMeters = None          # ── [ML]
+        # QoS perfectly matched to RViz settings
+        map_qos = QoSProfile(
+            depth=10,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.VOLATILE
+        )
+        self.map_pub = self.create_publisher(OccupancyGrid, '/map', map_qos)
+        self.tf_broadcaster = TransformBroadcaster(self)
+        self.latest_odom_msg_for_tf = None
+        self.rviz_tf_timer = self.create_timer(0.05, self._publish_stable_rviz_tf_timer)
 
-        self.run_modes = ['continuous', 'discrete', 'discrete_random']
-        self.run_mode = None
-        self.use_ground_truth_map_to_generate_observations = False
-        self.verbose = False
-        self.use_lidar_as_ground_truth = False
-        self.manual_goal_cell: PosePixels = None
-        self.use_depth_pointcloud = False
-        self.save_training_data = False                    # ── [ML]
-        self.training_data_dirpath = None                  # ── [ML]
-        self.viz_paused = False
-        self.pub_viz_images = False
+        # Publishers
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 1)
+        # Publish the CURRENT target waypoint so a visualizer or other
+        # tool can see exactly what runner_node is aiming for right now
+        # (not just the full static path from motion_planner).
+        self.current_waypoint_pub = self.create_publisher(
+            PoseStamped, '/runner_current_waypoint', 10)
 
-        self.read_params()
+        self.cb_group = ReentrantCallbackGroup()
 
-        self.cmd_vel_pub = self.create_publisher(Twist, TOPIC_CMD_VEL, 1)
-        self.sim_viz_pub = self.create_publisher(Image, '/cmn/viz/sim', 1)
-        self.cmn_viz_pub = self.create_publisher(Image, '/cmn/viz/cmn', 1)
+        # Subscribers
+        self.create_subscription(Odometry, '/odom', self.get_odom, 10, callback_group=self.cb_group)
+        self.create_subscription(PoseStamped, '/goal_pose', self.rviz_goal_callback, 10, callback_group=self.cb_group)
 
-        self.declare_parameter('run_mode', 'discrete')
-        self.declare_parameter('use_sim',  False)
-        self.declare_parameter('use_viz',  False)
+        # ── Path following: receives the plan from motion_planner.py ───────────
+        path_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Path, '/planned_path', self.path_callback, path_qos, callback_group=self.cb_group)
+        self.path = []
+        self.waypoint_idx = 0
+        self.robot_yaw = 0.0
+        self.path_goal_reached = False
+        self.create_timer(0.1, self.path_follow_loop, callback_group=self.cb_group)
 
-        run_mode = self.get_parameter('run_mode').get_parameter_value().string_value
-        use_sim  = self.get_parameter('use_sim').get_parameter_value().bool_value
-        use_viz  = self.get_parameter('use_viz').get_parameter_value().bool_value
+        self.setup_complete = False
+        self.map_published_once = False
 
-        if run_mode not in self.run_modes:
-            self.get_logger().error('Invalid run_mode: {}. Shutting down.'.format(run_mode))
-            raise SystemExit('Invalid run_mode.')
+        self.startup_timer = self.create_timer(1.0, self.async_setup, callback_group=self.cb_group)
+        self.create_timer(1.0, self.publish_map, callback_group=self.cb_group)
 
-        self.set_global_params(run_mode, use_sim, use_viz)
+    def async_setup(self):
+        if self.setup_complete: return
+        self.startup_timer.cancel()
 
-        self.cb_group_timer = MutuallyExclusiveCallbackGroup()
-        self.cb_group_subs = ReentrantCallbackGroup()
-
-        self.odom_sub  = self.create_subscription(Odometry, TOPIC_ODOM, self.get_odom, 10, callback_group=self.cb_group_subs)
-        self.rgb_sub   = self.create_subscription(Image, TOPIC_CAMERA, self.get_rgb_image, 1, callback_group=self.cb_group_subs)
-        self.lidar_sub = self.create_subscription(LaserScan, TOPIC_LIDAR, self.get_lidar, 1, callback_group=self.cb_group_subs)
-        # ── [ML] pose estimate from the ML node, fused into odom in get_odom()
-        self.ml_estimated_pose_sub = self.create_subscription(
-            Point, '/ml_estimated_pose', self.get_ml_estimated_pose, 10, callback_group=self.cb_group_subs)
-
-        self.timer = self.create_timer(self.dt, self.timer_update_loop, callback_group=self.cb_group_timer)
-
-        self.get_logger().info('RunnerNode started — vinebot, mode: {}'.format(run_mode))
+        print("⏳ Loading map in the background...", flush=True)
+        try:
+            self.mfm = MapFrameManager(use_discrete_state_space=True)
+            self.setup_complete = True
+            print("✅ BACKGROUND LOAD COMPLETE! Map is now actively broadcasting.", flush=True)
+        except Exception as e:
+            print(f"❌ ERROR DURING STARTUP: {e}", flush=True)
 
     def _publish_cmd_vel(self, fwd: float, ang: float):
         msg = Twist()
@@ -94,237 +89,290 @@ class RunnerNode(Node):
         self.cmd_vel_pub.publish(msg)
 
     def publish(self, twist_msg):
-        # --- FIXED: Perfect 10-Tick Math Synchronization ---
         is_turn = abs(twist_msg.angular.z) > 0.01
         is_move = abs(twist_msg.linear.x) > 0.01
 
         if is_turn:
-            self.get_logger().info("🤖 AI COMMAND: Perfect 90-degree turn.")
+            print("🤖 AI COMMAND: Perfect 90-degree turn.", flush=True)
             cmd = Twist()
-            import math
             cmd.angular.z = math.copysign(0.5, twist_msg.angular.z)
-            steps = 10  # 10 ticks * 9.0 deg = 90 degrees
-            for _ in range(steps):
+            for _ in range(10):
                 self.cmd_vel_pub.publish(cmd)
                 time.sleep(0.1)
 
         elif is_move:
-            self.get_logger().info("🤖 AI COMMAND: Perfect grid step forward.")
+            print("🤖 AI COMMAND: Perfect grid step forward.", flush=True)
             cmd = Twist()
-            import math
             cmd.linear.x = math.copysign(0.5, twist_msg.linear.x)
-            steps = 10 # 10 ticks * 0.05m = 0.5 meters
-            for _ in range(steps):
+            for _ in range(10):
                 self.cmd_vel_pub.publish(cmd)
                 time.sleep(0.1)
 
-        # Slam the brakes and let the camera settle for the AI
         self.cmd_vel_pub.publish(Twist())
         time.sleep(0.5)
 
-    def timer_update_loop(self):
-        if self.cmn_interface is None: return
+    def publish_map(self):
+        if not self.setup_complete or self.mfm is None:
+            return
 
-        if self.cmn_interface.visualizer is not None:
-            sim_viz_img = None
-            cmn_viz_img = None
+        grid_map = self.mfm.map
+        if grid_map is None: return
 
-            if self.use_ground_truth_map_to_generate_observations:
-                sim_viz_img = self.cmn_interface.visualizer.get_updated_img()
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'map'
+        t.child_frame_id = 'odom'
+        t.transform.translation.x = 0.0
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.0
+        t.transform.rotation.w = 1.0
+        self.tf_broadcaster.sendTransform(t)
 
-            if (self.cmn_interface.cmn_node is not None and
-                    self.cmn_interface.cmn_node.visualizer is not None):
-                cmn_viz_img = self.cmn_interface.cmn_node.visualizer.get_updated_img()
+        msg = OccupancyGrid()
+        msg.header.frame_id = 'map'
+        msg.header.stamp = t.header.stamp
+        resolution = 0.02
+        msg.info.resolution = resolution
+        msg.info.height = int(grid_map.shape[0])
+        msg.info.width = int(grid_map.shape[1])
+        msg.info.origin.position.x = float(-(grid_map.shape[1] / 2.0) * resolution)
+        msg.info.origin.position.y = float(-(grid_map.shape[0] / 2.0) * resolution)
+        msg.info.origin.orientation.w = 1.0
 
-            if self.pub_viz_images:
-                if sim_viz_img is not None:
-                    self.sim_viz_pub.publish(self.cv_bridge.cv2_to_imgmsg(sim_viz_img))
-                if cmn_viz_img is not None:
-                    self.cmn_viz_pub.publish(self.cv_bridge.cv2_to_imgmsg(cmn_viz_img))
-            else:
-                if sim_viz_img is not None: cv2.imshow('sim viz', sim_viz_img)
-                if cmn_viz_img is not None: cv2.imshow('cmn viz', cmn_viz_img)
-                key = cv2.waitKey(int(self.dt * 1000))
-                if key == ord('q'):
-                    cv2.destroyAllWindows()
-                    rclpy.shutdown()
-                    return
+        msg.data = np.where(grid_map == 1, 100, 0).astype(np.int8).flatten().tolist()
+        self.map_pub.publish(msg)
 
-        pano_rgb = None
-        local_occ_depth = None
+        if not self.map_published_once:
+            print("🗺️ MAP BROADCAST SUCCESSFUL! Check RViz now.", flush=True)
+            self.map_published_once = True
 
-        if self.cmn_interface.last_pano_rgb is not None:
-            pano_rgb = self.cmn_interface.last_pano_rgb
-            local_occ_depth = self.cmn_interface.last_depth_local_occ
-        elif self.use_ground_truth_map_to_generate_observations:
-            pass
-        elif self.use_lidar_as_ground_truth:
-            pass
-        else:
-            pano_rgb, local_occ_depth = self.get_pano_meas()
+    def _nearest_free_pose_px(self, pose_px, max_radius: int = 120):
+        """
+        Snap any pixel pose to the nearest valid free cell on the hand-drawn map.
+        Internal map convention: 1 = free, 0 = obstacle.
+        """
+        if pose_px is None:
+            return None
+        if self.mfm is None:
+            return pose_px
 
-        # ── [ML] forward lidar-derived local occupancy into the CMN visualizer
-        if (locobot_interface.g_lidar_local_occ_meas is not None and
-                self.cmn_interface.cmn_node is not None and
-                self.cmn_interface.cmn_node.visualizer is not None):
-            self.cmn_interface.cmn_node.visualizer.lidar_local_occ_meas = \
-                locobot_interface.g_lidar_local_occ_meas
+        m = self.mfm.map_with_border
+        H, W = m.shape
 
+        r0 = int(round(pose_px.r))
+        c0 = int(round(pose_px.c))
+        yaw = float(getattr(pose_px, "yaw", 0.0))
+
+        r0 = max(0, min(H - 1, r0))
+        c0 = max(0, min(W - 1, c0))
+
+        if m[r0, c0] == 1:
+            return PosePixels(r0, c0, yaw)
+
+        best = None
+        best_d2 = None
+
+        for rad in range(1, max_radius + 1):
+            for dr in range(-rad, rad + 1):
+                for dc in (-rad, rad):
+                    r = r0 + dr
+                    c = c0 + dc
+                    if 0 <= r < H and 0 <= c < W and m[r, c] == 1:
+                        d2 = dr * dr + dc * dc
+                        if best is None or d2 < best_d2:
+                            best = (r, c)
+                            best_d2 = d2
+
+            for dc in range(-rad + 1, rad):
+                for dr in (-rad, rad):
+                    r = r0 + dr
+                    c = c0 + dc
+                    if 0 <= r < H and 0 <= c < W and m[r, c] == 1:
+                        d2 = dr * dr + dc * dc
+                        if best is None or d2 < best_d2:
+                            best = (r, c)
+                            best_d2 = d2
+
+            if best is not None:
+                r, c = best
+                return PosePixels(r, c, yaw)
+
+        return PosePixels(r0, c0, yaw)
+
+    def rviz_goal_callback(self, msg):
+        self.goal_received = True
+        print("🎯 Goal received from RViz.", flush=True)
+        print("Goal pose received on /goal_pose", flush=True)
+
+        if not self.setup_complete or self.mfm is None:
+            print("❌ Goal ignored: Map Frame Manager not ready.", flush=True)
+            return
+
+        pose_m = PoseMeters(float(msg.pose.position.x), float(msg.pose.position.y), 0.0)
+        raw_goal_px = self.mfm.transform_pose_m_to_px(pose_m)
+        goal_px = self._nearest_free_pose_px(raw_goal_px, max_radius=150)
+
+        if goal_px is None:
+            print("❌ Goal ignored: could not convert goal pose to map pixel.", flush=True)
+            return
+
+        print(
+            f"🎯 Goal mapped: raw_px=({int(raw_goal_px.r)}, {int(raw_goal_px.c)}) "
+            f"→ free_px=({int(goal_px.r)}, {int(goal_px.c)})",
+            flush=True
+        )
+
+        self.current_goal_px = goal_px
+        self.goal_received = True
+        print("✅ Goal set from RViz goal_pose", flush=True)
+
+    def _publish_stable_rviz_tf_timer(self):
+        """
+        Permanent RViz TF chain:
+            map -> odom -> base_footprint
+
+        This prevents RViz Fixed Frame 'map' and RobotModel from disappearing.
+        """
         try:
-            self.cmn_interface.run(
-                pano_rgb, self.dt,
-                locobot_interface.g_lidar_local_occ_meas, local_occ_depth)
-        except SystemExit as e:
-            self.get_logger().info('Run ended: {}'.format(str(e)))
-            rclpy.shutdown()
+            now = self.get_clock().now().to_msg()
 
-    def read_params(self):
-        pkg_path = get_package_share_directory('robo_project')
-        self.yaml_path = os.path.join(pkg_path, 'config/config.yaml')
-        with open(self.yaml_path, 'r') as f:
-            config = yaml.safe_load(f)
-            self.verbose                      = config['verbose']
-            self.dt                           = config['dt']
-            self.enable_localization          = config['particle_filter']['enable']
-            self.enable_ml_model              = not config['model']['skip_loading']
-            self.discrete_assume_yaw_is_known = config['discrete_assume_yaw_is_known']
-            if config.get('manually_set_goal_cell', False):
-                self.manual_goal_cell = PosePixels(config['goal_row'], config['goal_col'])
-            self.use_lidar_as_ground_truth = config['lidar']['use_lidar_as_ground_truth']
-            self.fuse_lidar_with_rgb       = config['lidar']['fuse_lidar_with_rgb']
-            self.use_depth_as_ground_truth = config['depth']['use_depth_as_ground_truth']
-            if self.use_depth_as_ground_truth:
-                self.use_depth_pointcloud = config['depth']['use_pointcloud']
-                self.depth_proc_func = (locobot_interface.get_local_occ_from_pointcloud if self.use_depth_pointcloud else locobot_interface.get_local_occ_from_depth)
-            locobot_interface.read_params()
-            self.desired_meas_shape = (config['measurements']['height'], config['measurements']['width'])
+            # map -> odom
+            t_map_odom = TransformStamped()
+            t_map_odom.header.stamp = now
+            t_map_odom.header.frame_id = "map"
+            t_map_odom.child_frame_id = "odom"
+            t_map_odom.transform.translation.x = 0.0
+            t_map_odom.transform.translation.y = 0.0
+            t_map_odom.transform.translation.z = 0.0
+            t_map_odom.transform.rotation.x = 0.0
+            t_map_odom.transform.rotation.y = 0.0
+            t_map_odom.transform.rotation.z = 0.0
+            t_map_odom.transform.rotation.w = 1.0
 
-            # ── [ML] training-data capture settings
-            self.save_training_data = config.get('save_data_for_training', False)
-            if self.save_training_data:
-                dirpath = config.get('training_data_dirpath', 'data')
-                if not dirpath.startswith('/'):
-                    dirpath = os.path.join(pkg_path, dirpath)
-                self.training_data_dirpath = os.path.join(dirpath, strftime('%Y%m%d-%H%M%S'))
-                os.makedirs(self.training_data_dirpath, exist_ok=True)
+            transforms = [t_map_odom]
 
-    def set_global_params(self, run_mode: str, use_sim: bool = False, use_viz: bool = False):
-        self.run_mode = run_mode
-        self.use_ground_truth_map_to_generate_observations = use_sim
-        config = CmnConfig()
-        config.run_mode            = run_mode
-        config.enable_sim          = use_sim
-        config.enable_viz          = use_viz
-        config.enable_ml_model     = self.enable_ml_model
-        config.enable_localization = self.enable_localization
-        config.use_lidar_as_ground_truth = (self.use_lidar_as_ground_truth and not use_sim)
-        config.fuse_lidar_with_rgb = (self.fuse_lidar_with_rgb and not self.use_lidar_as_ground_truth and not use_sim and self.enable_ml_model)
-        config.use_depth_as_ground_truth = (self.use_depth_as_ground_truth and not self.use_lidar_as_ground_truth and not use_sim)
-        config.assume_yaw_is_known = (self.discrete_assume_yaw_is_known and 'discrete' in run_mode)
-        if self.manual_goal_cell is not None:
-            config.manually_set_goal_cell = True
-            config.manual_goal_cell = self.manual_goal_cell
-        self.cmn_interface = CoarseMapNavInterface(config, self)
-        # ── [ML] wire training-data capture settings into the CMN interface
-        self.cmn_interface.save_training_data = self.save_training_data
-        self.cmn_interface.training_data_dirpath = self.training_data_dirpath
+            # odom -> base_footprint from latest Habitat odom
+            msg = getattr(self, "latest_odom_msg_for_tf", None)
+            if msg is not None:
+                t_odom_base = TransformStamped()
+                t_odom_base.header.stamp = now
+                t_odom_base.header.frame_id = "odom"
+                t_odom_base.child_frame_id = "base_footprint"
+                t_odom_base.transform.translation.x = float(msg.pose.pose.position.x)
+                t_odom_base.transform.translation.y = float(msg.pose.pose.position.y)
+                t_odom_base.transform.translation.z = float(msg.pose.pose.position.z)
+                t_odom_base.transform.rotation = msg.pose.pose.orientation
+                transforms.append(t_odom_base)
 
-    def get_rgb_image(self, msg: Image): self.most_recent_rgb_meas = msg
+            self.tf_broadcaster.sendTransform(transforms)
 
-    def get_lidar(self, msg: LaserScan):
-        locobot_interface.get_local_occ_from_lidar(msg)
-        # ── [ML] feed lidar-detected obstacle state to the motion planner
-        if self.cmn_interface is not None:
-            self.cmn_interface.motion_planner.obstacle_in_front_of_robot = \
-                locobot_interface.g_lidar_detects_robot_facing_wall
+        except Exception as e:
+            if not hasattr(self, "_stable_rviz_tf_warned"):
+                print(f"⚠️ Stable RViz TF publish failed: {e}", flush=True)
+                self._stable_rviz_tf_warned = True
 
     def get_odom(self, msg: Odometry):
+        self.latest_odom_msg_for_tf = msg
+
+        if not self.setup_complete or self.mfm is None:
+            return
+
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
-        yaw = atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+        yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        )
 
         odom_pose = PoseMeters(x, y, yaw)
-        if self.first_odom is None:
-            self.first_odom = odom_pose
+        self.latest_odom_yaw_for_astar = odom_pose.yaw
+        self.robot_yaw = yaw
+
+    # ── Path following ────────────────────────────────────────────────────────
+
+    def path_callback(self, msg: Path):
+        if not msg.poses:
+            return
+        new_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        if new_path == self.path:
+            return  # ignore republishes of the same path (don't reset progress)
+        self.path = new_path
+        self.waypoint_idx = 0
+        self.path_goal_reached = False
+        print(f"Path received from motion_planner: {len(self.path)} waypoints. Following now.", flush=True)
+
+    def path_follow_loop(self):
+        if not self.path or self.path_goal_reached:
+            return
+        odom_msg = self.latest_odom_msg_for_tf
+        if odom_msg is None:
+            return
+
+        rx = float(odom_msg.pose.pose.position.x)
+        ry = float(odom_msg.pose.pose.position.y)
+        ryaw = self.robot_yaw
+
+        if self.waypoint_idx >= len(self.path):
+            self._publish_cmd_vel(0.0, 0.0)
+            self.path_goal_reached = True
+            print("GOAL REACHED! Robot stopped.", flush=True)
+            return
+
+        wx, wy = self.path[self.waypoint_idx]
+
+        # Publish current target so it can be visualized live
+        wp_msg = PoseStamped()
+        wp_msg.header.frame_id = 'map'
+        wp_msg.header.stamp = self.get_clock().now().to_msg()
+        wp_msg.pose.position.x = wx
+        wp_msg.pose.position.y = wy
+        wp_msg.pose.orientation.w = 1.0
+        self.current_waypoint_pub.publish(wp_msg)
+
+        dist = math.hypot(wx - rx, wy - ry)
+
+        if dist < 0.15:
+            self.waypoint_idx += 1
+            print(f"Waypoint {self.waypoint_idx}/{len(self.path)} reached.", flush=True)
+            return
+
+        angle_to_wp = math.atan2(wy - ry, wx - rx)
+        angle_err = self._wrap_angle(angle_to_wp - ryaw)
+
+        # Debug: show exactly what the steering logic is computing,
+        # so a direction bug is visible directly in the terminal.
+        now = time.time()
+        if not hasattr(self, "_last_steer_log") or now - self._last_steer_log > 1.0:
+            print(
+                f"[steer] robot=({rx:.2f},{ry:.2f}) yaw={math.degrees(ryaw):.0f}° "
+                f"-> target=({wx:.2f},{wy:.2f}) dist={dist:.2f}m "
+                f"angle_to_wp={math.degrees(angle_to_wp):.0f}° "
+                f"angle_err={math.degrees(angle_err):.0f}°",
+                flush=True)
+            self._last_steer_log = now
+
+        if abs(angle_err) > 0.15:
+            ang = 0.5 if angle_err > 0 else -0.5
+            self._publish_cmd_vel(0.0, ang)
         else:
-            odom_pose.make_relative(self.first_odom)
+            self._publish_cmd_vel(0.3, 0.5 * angle_err)
 
-        if self.cmn_interface is not None:
-            # ── [ML] weighted fusion of raw odom with the ML-estimated pose
-            if self.ml_estimated_pose is not None:
-                alpha = 0.7
-                fused_x = alpha * odom_pose.x + (1.0 - alpha) * self.ml_estimated_pose.x
-                fused_y = alpha * odom_pose.y + (1.0 - alpha) * self.ml_estimated_pose.y
-                fused_pose = PoseMeters(fused_x, fused_y, odom_pose.yaw)
-                self.cmn_interface.set_new_odom(fused_pose)
-                if self.verbose:
-                    self.get_logger().info(f"Fused Pose: x={fused_x:.3f}, y={fused_y:.3f}")
-            else:
-                self.cmn_interface.set_new_odom(odom_pose)
+    @staticmethod
+    def _wrap_angle(a):
+        while a > math.pi: a -= 2 * math.pi
+        while a < -math.pi: a += 2 * math.pi
+        return a
 
-        if self.verbose:
-            self.get_logger().info('Odom: {}'.format(odom_pose))
-
-    # ── [ML] receives the ML pose estimate, consumed by get_odom() above
-    def get_ml_estimated_pose(self, msg: Point):
-        self.ml_estimated_pose = PoseMeters(msg.x, msg.y, 0.0)
-        if self.verbose:
-            self.get_logger().info(f"ML Pose: x={msg.x:.3f}, y={msg.y:.3f}")
-
-    def _turn_90_degrees_right(self):
-        self.get_logger().info('Physically turning 90 degrees right...')
-        cmd = Twist()
-        cmd.angular.z = -0.5
-        steps = 10 # 10 ticks * 9.0 deg = 90 degrees
-        for _ in range(steps):
-            self.cmd_vel_pub.publish(cmd)
-            time.sleep(0.1)
-        self.cmd_vel_pub.publish(Twist()) # Stop
-        time.sleep(0.5) # Wait for camera to settle
-
-    def get_pano_meas(self):
-        self.get_logger().info('Building panoramic measurement via four pivots.')
-        local_occ_meas = None
-        pano_front = self._pop_rgb_buffer()
-
-        self._turn_90_degrees_right()
-        self.cmn_interface.motion_planner.cmd_discrete_action('turn_right')
-        pano_right = self._pop_rgb_buffer()
-
-        self._turn_90_degrees_right()
-        self.cmn_interface.motion_planner.cmd_discrete_action('turn_right')
-        pano_back = self._pop_rgb_buffer()
-
-        self._turn_90_degrees_right()
-        self.cmn_interface.motion_planner.cmd_discrete_action('turn_right')
-        pano_left = self._pop_rgb_buffer()
-
-        self._turn_90_degrees_right()
-        self.cmn_interface.motion_planner.cmd_discrete_action('turn_right')
-
-        pano_rgb = np.concatenate([pano_front[:, :, 0:3], pano_right[:, :, 0:3], pano_back[:, :, 0:3], pano_left[:, :, 0:3]], axis=1)
-        pano_rgb = cv2.cvtColor(pano_rgb, cv2.COLOR_RGB2BGR)
-        return pano_rgb, local_occ_meas
-
-    def _pop_rgb_buffer(self):
-        self.most_recent_rgb_meas = None
-        while self.most_recent_rgb_meas is None: 
-            time.sleep(0.05)
-        img = self.cv_bridge.imgmsg_to_cv2(self.most_recent_rgb_meas, desired_encoding='passthrough')
-        return cv2.resize(img, self.desired_meas_shape)
 
 def main(args=None):
     rclpy.init(args=args)
     node = RunnerNode()
-    
     executor = MultiThreadedExecutor()
     executor.add_node(node)
-    
-    try:
-        executor.spin()
-    except KeyboardInterrupt:
-        pass
+    try: executor.spin()
+    except KeyboardInterrupt: pass
     finally:
         node.destroy_node()
         rclpy.shutdown()

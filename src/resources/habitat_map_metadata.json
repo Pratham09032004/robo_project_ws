@@ -1,0 +1,19 @@
+{
+  "width": 1527,
+  "height": 1024,
+  "origin_x": -4.568947792053223,
+  "origin_y": -1.9368900060653687,
+  "resolution_x": 0.005331885213545904,
+  "resolution_z": 0.0053288048366084695,
+  "resolution_used": 0.005331885213545904,
+  "x_range": [
+    -4.568947792053223,
+    3.572840929031372
+  ],
+  "z_range": [
+    -1.9368900060653687,
+    3.519806146621704
+  ],
+  "coordinate_frame": "habitat_world",
+  "conversion": "ros_map_x = habitat_x, ros_map_y = habitat_z"
+}

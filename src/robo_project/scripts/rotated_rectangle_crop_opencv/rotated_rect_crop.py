@@ -21,6 +21,10 @@ def crop_rotated_rectangle(image, rect):
     center = tuple(map(float, center))
     size = tuple(map(float, size))
 
+    # Ensure OpenCV warpAffine/remap gets a supported contiguous dtype.
+    image = np.nan_to_num(np.asarray(image), nan=0.0, posinf=1.0, neginf=0.0)
+    image = np.ascontiguousarray(image, dtype=np.float32)
+
     # Ensure the rectangle is within the image bounds.
     rows, cols = image.shape[:2]
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import math
 import numpy as np
 from math import remainder, tau, hypot
@@ -218,3 +216,4 @@ class Cell:
     def __str__(self):
         return "Cell ({},{}) g={:.1f} h={:.1f} f={:.1f}".format(
             self.r, self.c, self.g, self.h, self.f)
+            

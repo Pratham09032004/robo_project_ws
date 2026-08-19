@@ -1,0 +1,85 @@
+# Parameters for the project
+
+verbose: false # Show a lot more debug information.
+
+# Rate at which to publish velocity commands to the robot.
+dt: 0.1 # timer period in seconds.
+
+discrete_assume_yaw_is_known: true
+
+lidar:
+  use_lidar_as_ground_truth: false  # CHANGED: use lidar since camera not available yet
+  fuse_lidar_with_rgb: false
+  local_occ_size: 128
+  local_occ_resolution: 0.015
+
+depth:
+  use_depth_as_ground_truth: false  # CHANGED: no depth for now
+  use_pointcloud: false             # CHANGED: no pointcloud for now
+
+model:
+  skip_loading: false  # CHANGED: skip ML model for now, test ROS connections first
+  device: "cpu"
+  local_occ_net:
+      dropout: 0.5
+      use_pretrained_resnet18: True
+  pred_local_occ_size: 128
+  pred_local_occ_resolution: 0.01
+
+save_data_for_training: false  # CHANGED: disable for now
+
+training_data_dirpath: "data"
+
+measurements:
+  topic: "/camera/image_raw"  # CHANGED: correct vinebot camera topic
+  height: 224
+  width: 224
+  use_panorama: True
+
+map:
+  fname: "exp120_v1.png"
+  desired_meters_per_pixel: 0.05
+  obstacle_balloon_radius: 0
+  show_images_during_pre_proc: false  # CHANGED: prevent hanging on startup
+
+observation:
+  resolution: 0.05
+  height: 3
+  width: 3
+  veh_horz_pos_ratio: 0.5
+  veh_vert_pos_ratio: 0.5
+
+particle_filter:
+  enable: false
+  num_particles: 10
+  state_size: 3
+  random_sampling_rate: 0.1
+
+actions:
+  discrete_forward_dist: 0.43
+
+path_planning:
+  do_path_planning: false
+
+simulator:
+  show_obs_gen_debug: false
+  ground_truth_pose:
+    veh_x_initial: 0.0
+    veh_y_initial: 0.0
+    veh_yaw_initial: 0.0
+  allow_motion_through_occupied_cells: false
+
+constraints:
+  min_lin_vel: 0.05
+  max_lin_vel: 0.3
+  min_ang_vel: 0.2
+  max_ang_vel: 1.0
+
+goal_reach_deviation:
+  linear: 0.01
+  angular: 0.5
+
+move_goal_after_reaching: false
+manually_set_goal_cell: true
+goal_row: 14
+goal_col: 17

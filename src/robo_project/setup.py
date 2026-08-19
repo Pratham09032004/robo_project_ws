@@ -48,7 +48,7 @@ setup(
         'console_scripts': [
             # Existing simulation / planner / ML pose nodes
             'runner_node = robo_project.runner_node:main',
-            'action = robo_project.action_executive:main',
+            
             'ml_pose_node = robo_project.ml_pipeline.ml_pose_node:main',
             'pose_monitor_node = robo_project.ml_pipeline.pose_monitor_node:main',
             'bridge = robo_project.habitat_bridge_vinebot_2:main',
@@ -63,6 +63,11 @@ setup(
             # Jay local-occupancy ML utilities
             'train_local_occupancy = robo_project.ml_local_occ.train_local_occupancy:main',
             'test_local_occupancy_prediction = robo_project.ml_local_occ.test_local_occupancy_prediction:main',
+            
+            'simple_runner = robo_project.simple_runner:main',
+            'motion_planner = robo_project.motion_planner:main',
+            'check_map_vs_habitat = robo_project.check_map_vs_habitat:main',
+             'check_connectivity = robo_project.check_connectivity:main',
         ],
     },
 )
