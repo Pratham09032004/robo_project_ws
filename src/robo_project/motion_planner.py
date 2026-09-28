@@ -36,8 +36,10 @@ class MotionPlanner(Node):
 
         self.declare_parameter('goal_x', GOAL_X)
         self.declare_parameter('goal_y', GOAL_Y)
+        self.declare_parameter('goal_yaw', 0.0)  # final heading (rad) for the default goal
         self.goal_x = float(self.get_parameter('goal_x').value)
         self.goal_y = float(self.get_parameter('goal_y').value)
+        self.goal_yaw = float(self.get_parameter('goal_yaw').value)
 
         self.grid = None
         self.map_resolution = None
@@ -73,7 +75,8 @@ class MotionPlanner(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.pose.position.x = self.goal_x
         msg.pose.position.y = self.goal_y
-        msg.pose.orientation.w = 1.0
+        msg.pose.orientation.z = math.sin(self.goal_yaw / 2.0)
+        msg.pose.orientation.w = math.cos(self.goal_yaw / 2.0)
         return msg
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
@@ -97,9 +100,13 @@ class MotionPlanner(Node):
         """New goal from RViz "2D Goal Pose": replan from the current pose."""
         self.goal_x = float(msg.pose.position.x)
         self.goal_y = float(msg.pose.position.y)
+        q = msg.pose.orientation
+        self.goal_yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         self.goal_msg = self._build_goal_msg()
         self.goal_pub.publish(self.goal_msg)
-        self.get_logger().info(f"New goal from /goal_pose: x={self.goal_x:.2f}m, y={self.goal_y:.2f}m")
+        self.get_logger().info(
+            f"New goal from /goal_pose: x={self.goal_x:.2f}m, y={self.goal_y:.2f}m, "
+            f"yaw={math.degrees(self.goal_yaw):.0f} deg")
         self.planned = False
 
     def odom_callback(self, msg: Odometry):
@@ -159,7 +166,13 @@ class MotionPlanner(Node):
         astar_map = (self.grid == 0).astype(np.int8)
 
         start_row, start_col = self._snap_to_free(astar_map, start_row, start_col)
+        clicked_goal_cell = (goal_row, goal_col)
         goal_row, goal_col = self._snap_to_free(astar_map, goal_row, goal_col)
+        goal_is_free = (goal_row, goal_col) == clicked_goal_cell
+        if not goal_is_free:
+            self.get_logger().warn(
+                f"Goal ({self.goal_x:.2f}, {self.goal_y:.2f}) is inside an obstacle; "
+                f"using the nearest free cell instead.")
 
         planner = Astar()
         planner.map = astar_map
@@ -186,14 +199,20 @@ class MotionPlanner(Node):
         msg.header.frame_id = 'map'
         msg.header.stamp = self.get_clock().now().to_msg()
 
-        for wp in waypoints_px:
+        for i, wp in enumerate(waypoints_px):
             x, y = self.pixel_to_world(int(wp.r), int(wp.c))
+            if i == len(waypoints_px) - 1 and goal_is_free:
+                # End exactly on the clicked point, not on the centre of its grid cell.
+                x, y = self.goal_x, self.goal_y
             ps = PoseStamped()
             ps.header = msg.header
             ps.pose.position.x = x
             ps.pose.position.y = y
             ps.pose.orientation.w = 1.0
             msg.poses.append(ps)
+        # The last pose carries the goal heading; runner_node turns to it on arrival.
+        msg.poses[-1].pose.orientation.z = math.sin(self.goal_yaw / 2.0)
+        msg.poses[-1].pose.orientation.w = math.cos(self.goal_yaw / 2.0)
 
         self.last_path_msg = msg
         self.path_pub.publish(msg)

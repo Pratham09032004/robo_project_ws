@@ -72,6 +72,7 @@ setup(
 
             'motion_planner = robo_project.motion_planner:main',
             'vinebot_interface = robo_project.vinebot_interface:main',
+            'navmesh_to_map = robo_project.scripts.navmesh_to_map:main',
         ],
     },
 )

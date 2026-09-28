@@ -38,8 +38,12 @@ measurements:
 
 map:
   # Map file in config/maps/. Its matching .yaml (same name) holds resolution etc.
-  # lab_sketch.jpeg = photo of the hand-drawn lab map; exp120_v1.png = older coarse map.
-  fname: "lab_sketch.jpeg"
+  # imr_lab8_floor.npy = floor of the Habitat IMR lab scene, generated from its navmesh
+  #   (ros2 run robo_project navmesh_to_map ...), so it matches where the robot can drive.
+  # denmark_floor.npy = same for the Denmark scene.
+  # lab_sketch.jpeg = photo of the hand-drawn lab map (not to scale with the Habitat scene).
+  # exp120_v1.png = older coarse map.
+  fname: "imr_lab8_floor.npy"
   desired_meters_per_pixel: 0.05
   obstacle_balloon_radius: 0  # extra wall inflation in pixels (the sketch map was always used without it)
   show_images_during_pre_proc: false  # CHANGED: prevent hanging on startup

@@ -87,6 +87,11 @@ class VinebotHabitatBridge(Node):
         self.declare_parameter('max_ang_vel', 2.0)    # rad/s, clamp on /cmd_vel
         self.declare_parameter('cmd_timeout', 0.5)    # s without /cmd_vel -> stop
         self.declare_parameter('show_window', True)   # OpenCV window with the 4 cameras
+        # Optional start pose in the map frame. By default the robot starts at a random
+        # point on the FLOOR (Habitat's own random start can land on the roof or a table).
+        self.declare_parameter('start_x', float('nan'))
+        self.declare_parameter('start_y', float('nan'))
+        self.declare_parameter('start_yaw', float('nan'))
         self.scene_path = os.path.expanduser(str(self.get_parameter('scene_path').value))
         self.max_lin_vel = float(self.get_parameter('max_lin_vel').value)
         self.max_ang_vel = float(self.get_parameter('max_ang_vel').value)
@@ -116,6 +121,7 @@ class VinebotHabitatBridge(Node):
 
         self.sim = self.setup_habitat()
         self.agent = self.sim.initialize_agent(0)
+        self.place_agent_on_floor()
 
         # Latest velocity command and when it arrived.
         self.cmd_lin = 0.0
@@ -147,6 +153,43 @@ class VinebotHabitatBridge(Node):
 
         cfg = habitat_sim.Configuration(backend_cfg, [agent_cfg])
         return habitat_sim.Simulator(cfg)
+
+    def find_floor_height(self, samples=400):
+        """
+        Height of the floor level of the navmesh. Random navigable points are
+        area-weighted and include the roof and table tops, so take the lowest
+        height band that holds a real share of the samples.
+        """
+        pts = [np.asarray(self.sim.pathfinder.get_random_navigable_point(), dtype=np.float32) for _ in range(samples)]
+        pts = [p for p in pts if np.all(np.isfinite(p))]
+        heights = np.array([p[1] for p in pts])
+        for h in np.sort(np.unique(np.round(heights, 1))):
+            band = [p for p in pts if abs(p[1] - h) < 0.25]
+            if len(band) >= 0.05 * len(pts):
+                return float(h), band
+        return float(heights.min()), pts
+
+    def place_agent_on_floor(self):
+        floor_y, floor_pts = self.find_floor_height()
+        state = self.agent.get_state()
+        sx = float(self.get_parameter('start_x').value)
+        sy = float(self.get_parameter('start_y').value)
+        syaw = float(self.get_parameter('start_yaw').value)
+        if math.isfinite(sx) and math.isfinite(sy):
+            target = np.array([sx, floor_y, sy], dtype=np.float32)   # map (x, y) = habitat (x, z)
+            pos = np.asarray(self.sim.pathfinder.snap_point(target), dtype=np.float32)
+            if not np.all(np.isfinite(pos)) or abs(pos[1] - floor_y) > 0.3:
+                self.get_logger().warn(f"start_x/start_y ({sx:.2f}, {sy:.2f}) is not on the floor; using a random floor point.")
+                pos = floor_pts[np.random.randint(len(floor_pts))]
+        else:
+            pos = floor_pts[np.random.randint(len(floor_pts))]
+        state.position = np.asarray(pos, dtype=np.float32)
+        if math.isfinite(syaw):
+            state.rotation = ros_yaw_to_habitat_rotation(syaw)
+        self.agent.set_state(state)
+        self.get_logger().info(
+            f"Robot starts on the floor (height {floor_y:.2f} m) at map x={pos[0]:.2f}, y={pos[2]:.2f}, "
+            f"yaw={math.degrees(habitat_heading_to_ros_yaw(state.rotation)):.0f} deg")
 
     def cmd_vel_callback(self, msg):
         # Only store the command; it is integrated over the real elapsed time

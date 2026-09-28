@@ -54,9 +54,19 @@ class RunnerNode(Node):
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(Path, '/planned_path', self.path_callback, path_qos, callback_group=self.cb_group)
         self.path = []
+        self.goal_yaw = None
         self.waypoint_idx = 0
         self.robot_yaw = 0.0
         self.path_goal_reached = False
+
+        # Arrival tolerances: intermediate waypoints are passed loosely, the final
+        # one (the clicked goal) is reached tightly, then the robot turns to the goal heading.
+        self.declare_parameter('waypoint_tolerance', 0.15)   # m
+        self.declare_parameter('goal_tolerance', 0.05)       # m
+        self.declare_parameter('yaw_tolerance', 0.05)        # rad (~3 deg)
+        self.waypoint_tol = float(self.get_parameter('waypoint_tolerance').value)
+        self.goal_tol = float(self.get_parameter('goal_tolerance').value)
+        self.yaw_tol = float(self.get_parameter('yaw_tolerance').value)
         self.create_timer(0.1, self.path_follow_loop, callback_group=self.cb_group)
 
     def _publish_cmd_vel(self, fwd: float, ang: float):
@@ -79,9 +89,12 @@ class RunnerNode(Node):
         if not msg.poses:
             return
         new_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
-        if new_path == self.path:
+        q = msg.poses[-1].pose.orientation
+        new_goal_yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        if new_path == self.path and self.goal_yaw is not None and abs(self._wrap_angle(new_goal_yaw - self.goal_yaw)) < 1e-6:
             return  # ignore republishes of the same path (don't reset progress)
         self.path = new_path
+        self.goal_yaw = new_goal_yaw
         self.waypoint_idx = 0
         self.path_goal_reached = False
         print(f"Path received from motion_planner: {len(self.path)} waypoints. Following now.", flush=True)
@@ -98,9 +111,15 @@ class RunnerNode(Node):
         ryaw = self.robot_yaw
 
         if self.waypoint_idx >= len(self.path):
+            # At the goal position: turn in place to the goal heading, then stop.
+            yaw_err = self._wrap_angle(self.goal_yaw - ryaw)
+            if abs(yaw_err) > self.yaw_tol:
+                ang = math.copysign(min(0.5, max(0.1, abs(yaw_err))), yaw_err)
+                self._publish_cmd_vel(0.0, ang)
+                return
             self._publish_cmd_vel(0.0, 0.0)
             self.path_goal_reached = True
-            print("GOAL REACHED! Robot stopped.", flush=True)
+            print(f"GOAL REACHED! Robot stopped at ({rx:.2f}, {ry:.2f}), yaw {math.degrees(ryaw):.0f} deg.", flush=True)
             return
 
         wx, wy = self.path[self.waypoint_idx]
@@ -115,8 +134,9 @@ class RunnerNode(Node):
         self.current_waypoint_pub.publish(wp_msg)
 
         dist = math.hypot(wx - rx, wy - ry)
+        is_last = self.waypoint_idx == len(self.path) - 1
 
-        if dist < 0.15:
+        if dist < (self.goal_tol if is_last else self.waypoint_tol):
             self.waypoint_idx += 1
             print(f"Waypoint {self.waypoint_idx}/{len(self.path)} reached.", flush=True)
             return
@@ -140,7 +160,9 @@ class RunnerNode(Node):
             ang = 0.5 if angle_err > 0 else -0.5
             self._publish_cmd_vel(0.0, ang)
         else:
-            self._publish_cmd_vel(0.3, 0.5 * angle_err)
+            # Slow down when approaching the goal so it can stop within goal_tolerance.
+            fwd = min(0.3, max(0.05, dist)) if is_last else 0.3
+            self._publish_cmd_vel(fwd, 0.5 * angle_err)
 
     @staticmethod
     def _wrap_angle(a):
