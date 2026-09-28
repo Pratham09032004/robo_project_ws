@@ -14,7 +14,7 @@ from geometry_msgs.msg import Twist, Vector3
 # ROS 2 imports
 import rclpy
 import rclpy.logging
-from ament_index_python.packages import get_package_share_directory
+from robo_project.scripts.config_loader import load_config
 
 from robo_project.scripts.map_handler import clamp, MapFrameManager
 from robo_project.scripts.astar import Astar
@@ -56,20 +56,17 @@ class MotionPlanner:
         """
         Read configuration params from the yaml.
         """
-        # ROS 2: use ament_index to find the package share directory
-        pkg_path = get_package_share_directory('robo_project')
-        with open(pkg_path + '/config/config.yaml', 'r') as file:
-            config = yaml.safe_load(file)
-            self.verbose = config["verbose"]
-            self.astar.verbose = self.verbose
-            self.pure_pursuit.verbose = self.verbose
-            self.min_lin_vel = config["constraints"]["min_lin_vel"]
-            self.max_lin_vel = config["constraints"]["max_lin_vel"]
-            self.min_ang_vel = config["constraints"]["min_ang_vel"]
-            self.max_ang_vel = config["constraints"]["max_ang_vel"]
-            self.do_path_planning = config["path_planning"]["do_path_planning"]
-            self.pure_pursuit.use_finite_lookahead_dist = self.do_path_planning
-            self.move_goal_after_reaching = config["move_goal_after_reaching"]
+        config = load_config()
+        self.verbose = config["verbose"]
+        self.astar.verbose = self.verbose
+        self.pure_pursuit.verbose = self.verbose
+        self.min_lin_vel = config["constraints"]["min_lin_vel"]
+        self.max_lin_vel = config["constraints"]["max_lin_vel"]
+        self.min_ang_vel = config["constraints"]["min_ang_vel"]
+        self.max_ang_vel = config["constraints"]["max_ang_vel"]
+        self.do_path_planning = config["path_planning"]["do_path_planning"]
+        self.pure_pursuit.use_finite_lookahead_dist = self.do_path_planning
+        self.move_goal_after_reaching = config["move_goal_after_reaching"]
 
     def set_vel_pub(self, pub):
         """
@@ -254,12 +251,10 @@ class DiscreteMotionPlanner(MotionPlanner):
 
     def read_params(self):
         super().read_params()
-        pkg_path = get_package_share_directory('robo_project')
-        with open(pkg_path + '/config/config.yaml', 'r') as file:
-            config = yaml.safe_load(file)
-            self.discrete_forward_dist = abs(config["actions"]["discrete_forward_dist"])
-            self.lin_goal_reach_deviation = abs(config["goal_reach_deviation"]["linear"])
-            self.ang_goal_reach_deviation = radians(abs(config["goal_reach_deviation"]["angular"]))
+        config = load_config()
+        self.discrete_forward_dist = abs(config["actions"]["discrete_forward_dist"])
+        self.lin_goal_reach_deviation = abs(config["goal_reach_deviation"]["linear"])
+        self.ang_goal_reach_deviation = radians(abs(config["goal_reach_deviation"]["angular"]))
 
     def cmd_discrete_action(self, action: str):
         """

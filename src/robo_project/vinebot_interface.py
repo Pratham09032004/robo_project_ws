@@ -16,8 +16,7 @@ from cv_bridge import CvBridge
 from bresenham import bresenham
 from typing import Tuple
 
-# ROS 2: use ament_index instead of rospkg
-from ament_index_python.packages import get_package_share_directory
+from robo_project.scripts.config_loader import load_config
 
 # ROS 2: use rclpy logger
 import rclpy.logging
@@ -208,14 +207,10 @@ def read_params():
     """
     Read configuration params from the yaml.
     """
-    # ROS 2: use ament_index instead of rospkg
-    pkg_path = get_package_share_directory('robo_project')
-    yaml_path = os.path.join(pkg_path, 'config/config.yaml')
-    with open(yaml_path, 'r') as file:
-        config = yaml.safe_load(file)
-        global g_local_occ_size, g_local_occ_resolution
-        g_local_occ_size = config["lidar"]["local_occ_size"]
-        g_local_occ_resolution = config["lidar"]["local_occ_resolution"]
+    config = load_config()
+    global g_local_occ_size, g_local_occ_resolution
+    g_local_occ_size = config["lidar"]["local_occ_size"]
+    g_local_occ_resolution = config["lidar"]["local_occ_resolution"]
 
 
 class LocobotInterfaceNode(Node):

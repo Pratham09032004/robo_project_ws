@@ -14,8 +14,8 @@ from cv_bridge import CvBridge, CvBridgeError
 # ROS 2 imports
 import rclpy
 import rclpy.logging
-from ament_index_python.packages import get_package_share_directory
 
+from robo_project.scripts.config_loader import get_pkg_path, load_config
 from robo_project.scripts.rotated_rectangle_crop_opencv.rotated_rect_crop import crop_rotated_rectangle
 from robo_project.scripts.basic_types import PoseMeters, PosePixels, Pose
 
@@ -42,32 +42,54 @@ class CoarseMapProcessor:
     inv_occ_map = None
 
     def __init__(self):
-        self.pkg_path = get_package_share_directory('robo_project')
+        self.pkg_path = get_pkg_path()
 
-        with open(os.path.join(self.pkg_path, 'config/config.yaml'), 'r') as file:
-            config = yaml.safe_load(file)
-            self.verbose = config["verbose"]
-            self.show_map_images = config["map"]["show_images_during_pre_proc"]
-            self.map_fpath = os.path.join(self.pkg_path, "config/maps", config["map"]["fname"])
-            self.obs_balloon_radius = config["map"]["obstacle_balloon_radius"]
+        config = load_config()
+        self.verbose = config["verbose"]
+        self.show_map_images = config["map"]["show_images_during_pre_proc"]
+        self.map_fpath = os.path.join(self.pkg_path, "config/maps", config["map"]["fname"])
+        self.obs_balloon_radius = config["map"]["obstacle_balloon_radius"]
 
-            map_name = os.path.splitext(config["map"]["fname"])[0]
-            map_yaml_fpath = os.path.join(self.pkg_path, "config/maps", map_name + ".yaml")
-            if not os.path.exists(map_yaml_fpath):
-                map_yaml_fpath = os.path.join(self.pkg_path, "config/maps/default.yaml")
-            with open(map_yaml_fpath, 'r') as file2:
-                map_config = yaml.safe_load(file2)
-                self.map_resolution_raw = map_config["resolution"]
-                self.map_occ_thresh_min = map_config.get("occ_thresh_min", 0.1)
-                self.map_occ_thresh_max = map_config.get("occ_thresh_max", 0.9)
+        map_name = os.path.splitext(config["map"]["fname"])[0]
+        map_yaml_fpath = os.path.join(self.pkg_path, "config/maps", map_name + ".yaml")
+        if not os.path.exists(map_yaml_fpath):
+            map_yaml_fpath = os.path.join(self.pkg_path, "config/maps/default.yaml")
+        with open(map_yaml_fpath, 'r') as file2:
+            map_config = yaml.safe_load(file2)
+            self.map_resolution_raw = map_config["resolution"]
+            self.map_occ_thresh_min = map_config.get("occ_thresh_min", 0.1)
+            self.map_occ_thresh_max = map_config.get("occ_thresh_max", 0.9)
+            # "sketch" maps are photos of hand-drawn maps (white paper = free, pen = wall).
+            self.map_type = map_config.get("type", "image")
+            self.sketch_scale_percent = map_config.get("scale_percent", 100)
+            self.sketch_threshold = map_config.get("threshold", 150)
 
-            self.map_resolution_desired = config["map"]["desired_meters_per_pixel"]
-            self.map_downscale_ratio = self.map_resolution_raw / self.map_resolution_desired
+        self.map_resolution_desired = config["map"]["desired_meters_per_pixel"]
+        self.map_downscale_ratio = self.map_resolution_raw / self.map_resolution_desired
 
+        if not os.path.exists(self.map_fpath):
+            raise FileNotFoundError(f"Map file from config not found: {self.map_fpath}")
         self.read_coarse_map_from_file()
+        _logger.info(f"Loaded map {self.map_fpath} ({self.occ_map.shape[1]}x{self.occ_map.shape[0]} px)")
+
+    def read_sketch_map(self):
+        """
+        Load a photo of a hand-drawn map. The photo is shrunk so it doesn't
+        exhaust memory, then thresholded: white paper (> threshold) = 1 (free),
+        pen strokes = 0 (walls).
+        """
+        img = cv2.imread(self.map_fpath, cv2.IMREAD_GRAYSCALE)
+        width = int(img.shape[1] * self.sketch_scale_percent / 100 * self.map_downscale_ratio)
+        height = int(img.shape[0] * self.sketch_scale_percent / 100 * self.map_downscale_ratio)
+        img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
+        _, binary_map = cv2.threshold(img, self.sketch_threshold, 1, cv2.THRESH_BINARY)
+        return binary_map
 
     def read_coarse_map_from_file(self):
-        if os.path.splitext(self.map_fpath)[1] == ".npy":
+        if self.map_type == "sketch":
+            occ_map_img = self.read_sketch_map()
+            img = occ_map_img
+        elif os.path.splitext(self.map_fpath)[1] == ".npy":
             img = np.load(self.map_fpath)
         else:
             img = cv2.imread(self.map_fpath, cv2.IMREAD_UNCHANGED)
@@ -76,14 +98,15 @@ class CoarseMapProcessor:
                 img = cv2.add(cv2.merge([a1, a1, a1, a1]), img)
                 img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
 
-        img = cv2.resize(img, (int(img.shape[1] * self.map_downscale_ratio), int(img.shape[0] * self.map_downscale_ratio)), 0, 0, cv2.INTER_AREA)
+        if self.map_type != "sketch":
+            img = cv2.resize(img, (int(img.shape[1] * self.map_downscale_ratio), int(img.shape[0] * self.map_downscale_ratio)), 0, 0, cv2.INTER_AREA)
 
-        if len(img.shape) >= 3 and img.shape[2] >= 3:
-            self.raw_map = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            occ_map_img = cv2.threshold(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), self.map_occ_thresh_min, self.map_occ_thresh_max, cv2.THRESH_BINARY)[1]
-            occ_map_img = np.divide(occ_map_img, 255)
-        else:
-            occ_map_img = img
+            if len(img.shape) >= 3 and img.shape[2] >= 3:
+                self.raw_map = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                occ_map_img = cv2.threshold(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), self.map_occ_thresh_min, self.map_occ_thresh_max, cv2.THRESH_BINARY)[1]
+                occ_map_img = np.divide(occ_map_img, 255)
+            else:
+                occ_map_img = img
 
         self.occ_map = np.round(occ_map_img)
 
@@ -116,51 +139,26 @@ class MapFrameManager(CoarseMapProcessor):
     def __init__(self, use_discrete_state_space: bool):
         super().__init__()
         self.use_discrete_state_space = use_discrete_state_space
-        with open(os.path.join(self.pkg_path, "config/config.yaml"), 'r') as file:
-            config = yaml.safe_load(file)
-            self.obs_resolution = config["observation"]["resolution"] / self.map_downscale_ratio
-            self.obs_height_px = config["observation"]["height"]
-            self.obs_width_px = config["observation"]["width"]
-            self.obs_height_px_on_map = int(self.obs_height_px * self.obs_resolution / self.map_resolution_desired)
-            self.obs_width_px_on_map = int(self.obs_width_px * self.obs_resolution / self.map_resolution_desired)
-            self.veh_px_horz_from_center_on_obs = (config["observation"]["veh_horz_pos_ratio"] - 0.5) * self.obs_width_px
-            self.veh_px_vert_from_bottom_on_obs = config["observation"]["veh_vert_pos_ratio"] * self.obs_width_px
-            self.veh_px_horz_from_center_on_map = self.veh_px_horz_from_center_on_obs * self.obs_resolution / self.map_resolution_desired
-            self.veh_px_vert_from_bottom_on_map = self.veh_px_vert_from_bottom_on_obs * self.obs_resolution / self.map_resolution_desired
+        config = load_config()
+        self.obs_resolution = config["observation"]["resolution"] / self.map_downscale_ratio
+        self.obs_height_px = config["observation"]["height"]
+        self.obs_width_px = config["observation"]["width"]
+        self.obs_height_px_on_map = int(self.obs_height_px * self.obs_resolution / self.map_resolution_desired)
+        self.obs_width_px_on_map = int(self.obs_width_px * self.obs_resolution / self.map_resolution_desired)
+        self.veh_px_horz_from_center_on_obs = (config["observation"]["veh_horz_pos_ratio"] - 0.5) * self.obs_width_px
+        self.veh_px_vert_from_bottom_on_obs = config["observation"]["veh_vert_pos_ratio"] * self.obs_width_px
+        self.veh_px_horz_from_center_on_map = self.veh_px_horz_from_center_on_obs * self.obs_resolution / self.map_resolution_desired
+        self.veh_px_vert_from_bottom_on_map = self.veh_px_vert_from_bottom_on_obs * self.obs_resolution / self.map_resolution_desired
         self.setup_map()
 
     def setup_map(self):
-        # 🟢 Load the raw smartphone sketch
-        map_path = os.path.expanduser('~/robo_project_ws/src/resources/WhatsApp Image 2026-07-06 at 8.11.26 PM.jpeg')
-        try:
-            img = cv2.imread(map_path, cv2.IMREAD_GRAYSCALE)
-            if img is None:
-                raise FileNotFoundError(f"Image not found at {map_path}")
-            
-            # 🟢 CRITICAL FIX: Shrink the massive phone photo so it doesn't freeze the system memory
-            scale_percent = 20 # Compress to 20% of original size
-            width = int(img.shape[1] * scale_percent / 100)
-            height = int(img.shape[0] * scale_percent / 100)
-            dim = (width, height)
-            img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-
-            # 🟢 Threshold adjusted: White paper (>150) becomes 1 (free), blue pen (<150) becomes 0 (walls)
-            _, binary_map = cv2.threshold(img, 150, 1, cv2.THRESH_BINARY)
-            
-            self.map = binary_map.astype(int)
-            self.map_with_border = self.map.copy()
-            self.occ_map = self.map.copy()
-            _logger.info(f"✅ SUCCESS: Resized and loaded raw physical sketch from {map_path}")
-        except Exception as e:
-            _logger.error(f"🛑 Failed to load lab map: {e}")
-            self.map_with_border = self.occ_map.copy()
-            self.map = self.map_with_border
-
-        self.map_x_min_meters, self.map_y_min_meters = self.transform_map_px_to_m(self.map_with_border.shape[1] - 1, 0)
-        self.map_x_max_meters, self.map_y_max_meters = self.transform_map_px_to_m(0, self.map_with_border.shape[0] - 1)
-        max_obs_dim = ceil(np.sqrt(self.obs_height_px_on_map ** 2 + self.obs_width_px_on_map ** 2))
-        max_obs_dim = 3  
-        self.map_with_border = cv2.copyMakeBorder(self.map_with_border, max_obs_dim, max_obs_dim, max_obs_dim, max_obs_dim, cv2.BORDER_CONSTANT, None, 0.0)
+        # The map (image, .npy or hand-drawn sketch) comes from config.yaml -> map.fname.
+        self.map = np.round(self.occ_map).astype(int)
+        max_obs_dim = 3
+        self.map_with_border = cv2.copyMakeBorder(self.map, max_obs_dim, max_obs_dim, max_obs_dim, max_obs_dim, cv2.BORDER_CONSTANT, None, 0)
+        # transform_map_px_to_m(row, col): bottom-left cell gives the min corner, top-right the max.
+        self.map_x_min_meters, self.map_y_min_meters = self.transform_map_px_to_m(self.map_with_border.shape[0] - 1, 0)
+        self.map_x_max_meters, self.map_y_max_meters = self.transform_map_px_to_m(0, self.map_with_border.shape[1] - 1)
         self.initialized = True
         self.inv_map_with_border = np.logical_not(self.map_with_border).astype(int)
 
@@ -259,15 +257,14 @@ class Simulator(MapFrameManager):
 
     def __init__(self, use_discrete_state_space):
         super().__init__(use_discrete_state_space)
-        with open(os.path.join(self.pkg_path, 'config/config.yaml'), 'r') as file:
-            config = yaml.safe_load(file)
-            self.dt = config["dt"]
-            self.max_lin_vel = config["constraints"]["max_lin_vel"]
-            self.min_ang_vel = config["constraints"]["min_ang_vel"]
-            self.max_ang_vel = config["constraints"]["max_ang_vel"]
-            self.allow_motion_through_occupied_cells = config["simulator"]["allow_motion_through_occupied_cells"]
-            self.discrete_forward_dist = abs(config["actions"]["discrete_forward_dist"])
-            self.show_obs_gen_debug = config["simulator"]["show_obs_gen_debug"]
+        config = load_config()
+        self.dt = config["dt"]
+        self.max_lin_vel = config["constraints"]["max_lin_vel"]
+        self.min_ang_vel = config["constraints"]["min_ang_vel"]
+        self.max_ang_vel = config["constraints"]["max_ang_vel"]
+        self.allow_motion_through_occupied_cells = config["simulator"]["allow_motion_through_occupied_cells"]
+        self.discrete_forward_dist = abs(config["actions"]["discrete_forward_dist"])
+        self.show_obs_gen_debug = config["simulator"]["show_obs_gen_debug"]
         self.veh_pose_true_px = self.generate_random_valid_veh_pose(False)
         self.veh_pose_true_meters = self.transform_pose_px_to_m(self.veh_pose_true_px)
 

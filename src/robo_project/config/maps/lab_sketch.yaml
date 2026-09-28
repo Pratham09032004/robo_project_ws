@@ -1,0 +1,6 @@
+# Photo of the hand-drawn IMR lab map (previously resources/WhatsApp Image 2026-07-06 at 8.11.26 PM.jpeg).
+image: lab_sketch.jpeg
+type: sketch          # white paper = free, pen strokes = walls
+resolution: 0.05      # meters per pixel after scaling
+scale_percent: 20     # shrink the 3840x5120 photo to 20% before use
+threshold: 150        # grayscale > threshold -> free

@@ -12,8 +12,7 @@ from math import sin, cos
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
-# ROS 2: use ament_index instead of rospkg
-from ament_index_python.packages import get_package_share_directory
+from robo_project.scripts.config_loader import load_config
 
 from robo_project.scripts.basic_types import PosePixels
 from robo_project.scripts.map_handler import MapFrameManager
@@ -46,11 +45,8 @@ class Visualizer:
         """
         Read configuration params from the yaml.
         """
-        # ROS 2: use ament_index to find the package share directory
-        pkg_path = get_package_share_directory('robo_project')
-        with open(pkg_path + '/config/config.yaml', 'r') as file:
-            config = yaml.safe_load(file)
-            self.verbose = config["verbose"]
+        config = load_config()
+        self.verbose = config["verbose"]
 
     def set_observation(self, obs_img, obs_rect=None):
         """

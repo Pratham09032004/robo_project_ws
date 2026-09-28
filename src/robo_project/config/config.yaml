@@ -37,9 +37,11 @@ measurements:
   use_panorama: True
 
 map:
-  fname: "exp120_v1.png"
+  # Map file in config/maps/. Its matching .yaml (same name) holds resolution etc.
+  # lab_sketch.jpeg = photo of the hand-drawn lab map; exp120_v1.png = older coarse map.
+  fname: "lab_sketch.jpeg"
   desired_meters_per_pixel: 0.05
-  obstacle_balloon_radius: 1
+  obstacle_balloon_radius: 0  # extra wall inflation in pixels (the sketch map was always used without it)
   show_images_during_pre_proc: false  # CHANGED: prevent hanging on startup
 
 observation:

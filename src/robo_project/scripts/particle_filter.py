@@ -12,8 +12,7 @@ import numpy as np
 from math import sin, cos, remainder, tau
 from random import choices
 
-# ROS 2: use ament_index instead of rospkg
-from ament_index_python.packages import get_package_share_directory
+from robo_project.scripts.config_loader import load_config
 
 from robo_project.scripts.map_handler import MapFrameManager
 from robo_project.scripts.basic_types import PoseMeters, PosePixels
@@ -37,15 +36,12 @@ class ParticleFilter:
         """
         Instantiate the particle filter and set params from the config yaml.
         """
-        # ROS 2: use ament_index to find the package share directory
-        pkg_path = get_package_share_directory('robo_project')
-        with open(pkg_path + '/config/config.yaml', 'r') as file:
-            config = yaml.safe_load(file)
-            self.num_particles = int(config["particle_filter"]["num_particles"])
-            self.all_indices = list(range(self.num_particles))
-            self.state_size = int(config["particle_filter"]["state_size"])
-            random_sampling_rate = config["particle_filter"]["random_sampling_rate"]
-            self.num_to_resample_randomly = int(random_sampling_rate * self.num_particles)
+        config = load_config()
+        self.num_particles = int(config["particle_filter"]["num_particles"])
+        self.all_indices = list(range(self.num_particles))
+        self.state_size = int(config["particle_filter"]["state_size"])
+        random_sampling_rate = config["particle_filter"]["random_sampling_rate"]
+        self.num_to_resample_randomly = int(random_sampling_rate * self.num_particles)
 
         # Init arrays with correct dimensions.
         self.particle_set = np.zeros((self.num_particles, self.state_size))

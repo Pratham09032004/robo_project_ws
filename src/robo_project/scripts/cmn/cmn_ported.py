@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 
 import rclpy.logging
-from ament_index_python.packages import get_package_share_directory
+from robo_project.scripts.config_loader import get_pkg_path, load_config
 
 _logger = rclpy.logging.get_logger('cmn_ported')
 
@@ -79,14 +79,12 @@ class CoarseMapNavDiscrete:
 
         self.send_random_commands = send_random_commands
 
-        pkg_share = get_package_share_directory('robo_project')
+        pkg_share = get_pkg_path()
         cmn_model_dir = os.path.join(pkg_share, "scripts", "cmn", "model")
-        config_path = os.path.join(pkg_share, "config", "config.yaml")
 
-        with open(config_path, 'r') as file:
-            config = yaml.safe_load(file)
-            device_str = config["model"]["device"]
-            self.local_occ_net_config = config["model"]["local_occ_net"]
+        config = load_config()
+        device_str = config["model"]["device"]
+        self.local_occ_net_config = config["model"]["local_occ_net"]
 
         if not skip_load_model:
             path_to_model = os.path.join(
