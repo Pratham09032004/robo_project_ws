@@ -53,9 +53,13 @@ observation:
 
 particle_filter:
   enable: false
-  num_particles: 10
+  num_particles: 100
   state_size: 3
-  random_sampling_rate: 0.1
+  random_sampling_rate: 0.1       # share of particles re-drawn at random when the robot seems lost
+  random_sampling_threshold: 0.5  # ...i.e. when the best particle's likelihood is below this
+  resample_noise_xy: 0.02   # m, std of noise added to resampled particles
+  resample_noise_yaw: 0.02  # rad
+  cluster_radius: 0.3       # m, particles this close form one hypothesis for the pose estimate
 
 actions:
   discrete_forward_dist: 0.43

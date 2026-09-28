@@ -86,11 +86,18 @@ class CoarseMapNavDiscrete:
         device_str = config["model"]["device"]
         self.local_occ_net_config = config["model"]["local_occ_net"]
 
+        skip_load_model = skip_load_model or bool(config["model"].get("skip_loading", False))
         if not skip_load_model:
             path_to_model = os.path.join(
                 cmn_model_dir,
                 "trained_local_occupancy_predictor_model.pt"
             )
+            if not os.path.exists(path_to_model):
+                raise FileNotFoundError(
+                    f"CMN local occupancy model not found: {path_to_model}. The weights are not in the "
+                    f"repository; copy trained_local_occupancy_predictor_model.pt to "
+                    f"src/robo_project/scripts/cmn/model/ and rebuild, or skip loading the model with "
+                    f"'model: skip_loading: true' in config.yaml.")
             self.load_ml_model(path_to_model, device_str)
 
         self.coarse_map_graph = TopoMap(self.coarse_map_arr, self.mfm.obs_height_px, self.mfm.obs_width_px)
@@ -210,7 +217,7 @@ class CoarseMapNavDiscrete:
             if self.assume_yaw_is_known:
                 pred_belief = self.agent_belief_map.copy()
             else:
-                pred_belief = self.agent_belief_map[dir_ind].copy()
+                pred_belief = self.agent_belief_map[:, :, dir_ind].copy()
 
         if self.assume_yaw_is_known:
             self.predictive_belief_map = pred_belief

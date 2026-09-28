@@ -1,3 +1,4 @@
+import cv2
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -144,4 +145,5 @@ def up_scale_grid(grid):
             [r3_left_block, r3_middle_block, r3_right_block]
         ])
     else:
-        return np.resize(grid, (128, 128))
+        # np.resize() would tile/truncate the data instead of scaling it.
+        return cv2.resize(np.asarray(grid, dtype=np.float64), (128, 128), interpolation=cv2.INTER_NEAREST)
