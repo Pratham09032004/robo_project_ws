@@ -13,17 +13,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # FIX: Initialize the model instance so load_state_dict has an object to populate
 model = PoseEstimator()
 
-# FIX: Leverage ament tracking to locate your model files inside the share directory
+# Weights are installed to <share>/robo_project/ml_pipeline/ by setup.py.
+# Fall back to the file next to this script when running from the source tree.
+WEIGHTS_CANDIDATES = []
 try:
-    SHARE_DIR = get_package_share_directory('robo_project')
-    WEIGHTS_PATH = os.path.join(SHARE_DIR, "ml_pipeline", "pose_estimator.pth")
+    WEIGHTS_CANDIDATES.append(os.path.join(get_package_share_directory('robo_project'), "ml_pipeline", "pose_estimator.pth"))
 except Exception:
-    # Fallback backup for external testing out of a sourced terminal env
-    CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-    WEIGHTS_PATH = os.path.join(CURRENT_DIR, "pose_estimator.pth")
+    pass
+WEIGHTS_CANDIDATES.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pose_estimator.pth"))
+WEIGHTS_PATH = next((p for p in WEIGHTS_CANDIDATES if os.path.exists(p)), WEIGHTS_CANDIDATES[0])
 
 if not os.path.exists(WEIGHTS_PATH):
-    raise FileNotFoundError(f"Model weights not found at: {WEIGHTS_PATH}")
+    raise FileNotFoundError(f"Model weights not found. Looked in: {WEIGHTS_CANDIDATES}")
 
 # Load the verified weight maps and pass the model to the target device
 model_state = torch.load(WEIGHTS_PATH, map_location=device)

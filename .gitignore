@@ -1,16 +1,10 @@
+# ===== colcon build output =====
 build/
 install/
 log/
-*.png
-__pycache__/
-*.pt
-*.pth
-*.py
-*.sh
-*.glb
-*.navmesh
-COLCON_IGNORE
 
+# ===== Python =====
+__pycache__/
 *.pyc
 *.pyo
 *.egg-info/
@@ -20,21 +14,16 @@ COLCON_IGNORE
 .venv/
 env/
 
-install/*/lib/**/*
-
+# ===== Large ML checkpoints (share big ones via Drive) =====
+# The small weights the nodes load (ml_pipeline/*.pth, ml_runs/*.pth) are
+# already tracked; add new ones explicitly with `git add -f`.
 *.pt
 *.pth
 
-# ===== 3D assets / meshes (often large) =====
-*.stl
-*.glb
-*.dae
-*.obj
-*.mtl
-*.navmesh
-
 # ===== Data / arrays =====
+# Keep occupancy maps used by the config tracked.
 *.npy
+!src/robo_project/config/maps/*.npy
 
 # ===== Logs, temp, backups =====
 *.log

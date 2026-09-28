@@ -23,9 +23,16 @@ class MLLocalOccupancyNode(Node):
     def __init__(self):
         super().__init__("ml_local_occupancy_node")
 
-        default_het_model = PKG_DIR / "ml_runs" / "het_best.pt"
-        default_old_model = PKG_DIR / "ml_runs" / "local_occ_rgb4_3200samples_new.pth"
-        default_model = default_het_model if default_het_model.exists() else default_old_model
+        # ml_runs/ is installed to <share>/robo_project/ml_runs by setup.py;
+        # PKG_DIR/ml_runs is the source tree when running the script directly.
+        run_dirs = [PKG_DIR / "ml_runs"]
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            run_dirs.insert(0, Path(get_package_share_directory("robo_project")) / "ml_runs")
+        except Exception:
+            pass
+        candidates = [d / name for name in ("het_best.pt", "local_occ_rgb4_3200samples_new.pth") for d in run_dirs]
+        default_model = next((c for c in candidates if c.exists()), candidates[-1])
 
         self.declare_parameter("model_path", str(default_model))
         self.declare_parameter("output_topic", "/local_occupancy_ml")
