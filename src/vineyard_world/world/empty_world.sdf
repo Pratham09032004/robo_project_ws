@@ -96,7 +96,7 @@
         <visual name="tree_1_visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/plants/vineplant_11.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>

@@ -68,7 +68,7 @@ def predict_pose_from_pil(image):
 
 # Test sequence tracking execution block
 if __name__ == "__main__":
-    image_path = "~/robo_project_ws/src/dataset/00100_front.jpg"
+    image_path = os.path.expanduser("~/robo_project_ws/src/dataset/00100_front.jpg")
     try:
         x, z = predict_pose(image_path)
         print(f"Predicted X: {x:.4f}")

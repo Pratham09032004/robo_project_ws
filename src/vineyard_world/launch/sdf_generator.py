@@ -8,11 +8,17 @@ from PIL import Image
 
 # ───────────────────────────── CONFIG ──────────────────────────────
 
-HEIGHTMAP_PNG: str = "~/robo_project_ws/src/vineyard_world/materials/png/vineyard_arc_slope_heightmap_bumpy_smooth_512.png" # 512×512 grayscale PNG
+PKG_DIR = pathlib.Path(__file__).resolve().parents[1]  # src/vineyard_world
+# Assets are referenced as model://vineyard_world/... in the SDF; launch_sim.launch.py puts
+# the package's share folder on GZ_SIM_RESOURCE_PATH so Gazebo can resolve them.
+MODEL_URI: str = "model://vineyard_world"
+
+HEIGHTMAP_NAME: str = "vineyard_arc_slope_heightmap_bumpy_smooth_512.png"
+HEIGHTMAP_PNG: str = str(PKG_DIR / "materials" / "png" / HEIGHTMAP_NAME) # 512×512 grayscale PNG (read locally)
 HEIGHTMAP_SIZE_M: Tuple[float, float] = (50.0, 50.0) # (width, depth) in m
 HEIGHTMAP_MAX_Z: float = 12.0 # Max elevation difference (m)
 
-PLANT_MESH_BASE_PATH: str = "~/robo_project_ws/src/vineyard_world/mesh"  # Base directory for meshes
+PLANT_MESH_BASE_PATH: str = f"{MODEL_URI}/mesh"  # Base URI for meshes
 PLANT_MESH_COUNT: int = 4  # Number of available mesh files (Tree_1.obj to Tree_50.obj)
 PLANT_SCALE: Tuple[float, float, float] = (1, 1, 1)
 PLANT_ROLL: float = 1.57 # roll (rad) applied to every tree
@@ -57,8 +63,8 @@ def get_random_mesh_path() -> str:
     # Construct the mesh filename
     mesh_filename = f"Tree_{random_num}.obj"
     
-    # Return the full path
-    return str(pathlib.Path(PLANT_MESH_BASE_PATH) / mesh_filename)
+    # Return the full URI
+    return f"{PLANT_MESH_BASE_PATH}/{mesh_filename}"
 
 class HeightmapSampler:
     """Convert (x, y) world coords ➔ height using the grayscale PNG."""
@@ -115,6 +121,8 @@ def build_world() -> ET.Element:
     })
     render_engine = ET.SubElement(plugin_sensors, "render_engine")
     render_engine.text = "ogre2"
+    # Needed for the robot's IMU sensor to publish.
+    ET.SubElement(world, "plugin", name="gz::sim::systems::Imu", filename="gz-sim-imu-system")
 
 
     # Environment settings
@@ -224,14 +232,14 @@ def add_heightmap(parent: ET.Element) -> None:
 def build_heightmap_geom(textured: bool = False) -> ET.Element:
     """Build heightmap geometry element."""
     geom = ET.Element("heightmap")
-    ET.SubElement(geom, "uri").text = pathlib.Path(HEIGHTMAP_PNG).as_posix()
+    ET.SubElement(geom, "uri").text = f"{MODEL_URI}/materials/png/{HEIGHTMAP_NAME}"
     ET.SubElement(geom, "size").text = f"{HEIGHTMAP_SIZE_M[0]} {HEIGHTMAP_SIZE_M[1]} {HEIGHTMAP_MAX_Z}"
     ET.SubElement(geom, "pos").text = "0 0 0"
     
     if textured:
         tex = ET.SubElement(geom, "texture")
-        ET.SubElement(tex, "diffuse").text = "file://~/robo_project_ws/src/vineyard_world/materials/textures/dirt4.png"
-        ET.SubElement(tex, "normal").text = "file://~/robo_project_ws/src/vineyard_world/materials/textures/dirt4.png"
+        ET.SubElement(tex, "diffuse").text = f"{MODEL_URI}/materials/textures/dirt4.png"
+        ET.SubElement(tex, "normal").text = f"{MODEL_URI}/materials/textures/dirt4.png"
         ET.SubElement(tex, "size").text = "1"
     
     return geom
@@ -256,7 +264,7 @@ def add_individual_trees_with_random_meshes(parent: ET.Element) -> None:
             
             # Get random mesh for this tree
             random_mesh_path = get_random_mesh_path()
-            mesh_name = pathlib.Path(random_mesh_path).name
+            mesh_name = random_mesh_path.rsplit("/", 1)[-1]
             
             # Track mesh usage for statistics
             if mesh_name not in mesh_usage:
@@ -286,14 +294,14 @@ def add_single_tree_link_with_mesh(parent: ET.Element, name: str, x: float, y: f
     visual = ET.SubElement(link, "visual", name="visual")
     visual_geom = ET.SubElement(visual, "geometry")
     visual_mesh = ET.SubElement(visual_geom, "mesh")
-    ET.SubElement(visual_mesh, "uri").text = f"file://{pathlib.Path(mesh_path).as_posix()}"
+    ET.SubElement(visual_mesh, "uri").text = mesh_path
     ET.SubElement(visual_mesh, "scale").text = f"{PLANT_SCALE[0]} {PLANT_SCALE[1]} {PLANT_SCALE[2]}"
     
     # Collision element
     collision = ET.SubElement(link, "collision", name="collision")
     coll_geom = ET.SubElement(collision, "geometry")
     coll_mesh = ET.SubElement(coll_geom, "mesh")
-    ET.SubElement(coll_mesh, "uri").text = f"file://{pathlib.Path(mesh_path).as_posix()}"
+    ET.SubElement(coll_mesh, "uri").text = mesh_path
     ET.SubElement(coll_mesh, "scale").text = f"{PLANT_SCALE[0]} {PLANT_SCALE[1]} {PLANT_SCALE[2]}"
     
     # Pose relative to model (usually 0,0,0 since model pose handles positioning)
@@ -315,7 +323,7 @@ def add_single_tree_link_with_mesh(parent: ET.Element, name: str, x: float, y: f
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate an SDF world file with individual tree models using random meshes.")
     parser.add_argument("--out", "-o", type=str, 
-                       default="~/robo_project_ws/src/vineyard_world/world/vineyard_for_result.sdf",
+                       default=str(PKG_DIR / "world" / "vineyard_for_result.sdf"),
                        help="Output SDF file (default: vineyard_for_result.sdf)")
     parser.add_argument("--seed", type=int, default=None,
                        help="Random seed for reproducible results (optional)")

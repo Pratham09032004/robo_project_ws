@@ -7,7 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(ros_gz_sim REQUIRED)
+# ros_gz_sim is only needed at runtime (package.xml).
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

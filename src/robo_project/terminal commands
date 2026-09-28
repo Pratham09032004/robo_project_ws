@@ -1,47 +1,60 @@
-terminal 1
+===================== Habitat navigation (IMR lab) =====================
 
-conda activate habitat
-cd ~/robo_project_ws
-rm -rf build install log
-colcon build                               
-source install/setup.bash
-
-terminal 2
-
-conda activate habitat
-cd ~/robo_project_ws
-python3 src/robo_project/habitat_bridge_vinebot_2.py
-
-terminal 3
-
-cd ~/robo_project_ws
-source install/setup.bash
-ros2 launch vinebot_description robot_launch.py
-
-terminal 4
-
-conda activate habitat
-cd ~/robo_project_ws
-source install/setup.bash
-rviz2 -d src/vinebot_description/config/display_vinebot.rviz
-
-terminal 5
+terminal 1  (build once, and after every code change)
 
 conda activate habitat
 cd ~/robo_project_ws
 rm -rf build install log
 colcon build
 source install/setup.bash
-ros2 run robo_project runner_node
 
-
-terminal 6
+terminal 2  (Habitat simulator bridge: cameras, /odom, TF; drives with /cmd_vel)
 
 conda activate habitat
 cd ~/robo_project_ws
 source install/setup.bash
-ros2 run robo_project motion_planner
+python3 src/robo_project/habitat_bridge_vinebot_2.py
+#   other scene:  python3 src/robo_project/habitat_bridge_vinebot_2.py --ros-args -p scene_path:=/path/to/scene.glb
+
+terminal 3  (robot model for RViz)
+
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 launch vinebot_description robot_launch.py
+
+terminal 4  (RViz; use "2D Goal Pose" to send the robot somewhere)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+rviz2 -d src/vinebot_description/config/display_vinebot.rviz
+
+terminal 5  (map server + A* motion planner + path-following runner)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 launch robo_project run.launch.py
+#   initial goal:  ros2 launch robo_project run.launch.py goal_x:=1.0 goal_y:=-2.0
+
+Notes
+- The map comes from src/robo_project/config/config.yaml -> map.fname (default: the lab sketch).
+- Another config:  export ROBO_PROJECT_CONFIG=config_delton.yaml   (before launching)
 
 
+===================== Particle-filter validation (dataset replay) =====================
+
+cd ~/robo_project_ws
+source install/setup.bash
+export ROBO_PROJECT_CONFIG=config_delton.yaml
+ros2 launch robo_project pf_validation.launch.py dataset_path:=$HOME/robo_project_ws/dataset/cmn_dataset_delton
 
 
+===================== Gazebo vineyard simulation =====================
+
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 launch vinebot_description launch_sim.launch.py
+#   other world:  ... world:=$HOME/robo_project_ws/install/vineyard_world/share/vineyard_world/world/vineyard_for_result.sdf
+#   no GUI:       ... gz_args_extra:='-s --headless-rendering'
+#   drive:        ros2 topic pub -r 10 /diff_cont/cmd_vel geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.3}}}"

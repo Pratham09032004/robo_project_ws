@@ -4,7 +4,7 @@ import time
 from infer import predict_pose
 
 
-image_folder = "~/robo_project_ws/src/dataset/front"
+image_folder = os.path.expanduser("~/robo_project_ws/src/dataset/front")
 
 image_files = sorted(os.listdir(image_folder))
 

@@ -28,6 +28,7 @@
         name="gz::sim::systems::Sensors">
         <render_engine>ogre2</render_engine>
       </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
     <gravity>0 0 -9.8</gravity>
     <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
     <atmosphere type="adiabatic" />
@@ -42,7 +43,7 @@
         <collision name="collision">
           <geometry>
             <heightmap>
-              <uri>/home/vamsi/code/thesis/heightmaps/vineyard_heightmap.png</uri>
+              <uri>model://vineyard_world/materials/png/vineyard_arc_slope_heightmap_bumpy_smooth_513.png</uri>
               <size>50.0 50.0 12.0</size>
               <pos>0 0 0</pos>
             </heightmap>
@@ -51,12 +52,12 @@
         <visual name="visual">
           <geometry>
             <heightmap>
-              <uri>/home/vamsi/code/thesis/heightmaps/vineyard_heightmap.png</uri>
+              <uri>model://vineyard_world/materials/png/vineyard_arc_slope_heightmap_bumpy_smooth_513.png</uri>
               <size>50.0 50.0 12.0</size>
               <pos>0 0 0</pos>
               <texture>
-                <diffuse>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/materials/textures/dirt4.png</diffuse>
-                <normal>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/materials/textures/flat4.png</normal>
+                <diffuse>model://vineyard_world/materials/textures/dirt4.png</diffuse>
+                <normal>model://vineyard_world/materials/textures/flat4.png</normal>
                 <size>3</size>
               </texture>
             </heightmap>

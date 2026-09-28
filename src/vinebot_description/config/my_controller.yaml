@@ -82,7 +82,7 @@ diff_cont:
     right_wheel_names: ['rigth_middle_to_base','right_back_to_base','right_front_to_base']
 
     wheel_separation: 0.40
-    wheel_radius: 0.065   # <— sanity check this; 1.10 looked like a typo (meters!)
+    wheel_radius: 0.1325  # measured from the rubber wheel meshes (265 mm diameter), = axle height in the URDF
 
     use_stamped_vel: false
     position_feedback: false

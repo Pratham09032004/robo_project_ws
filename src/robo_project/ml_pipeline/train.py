@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 
@@ -7,7 +9,7 @@ from dataset_loader_v2 import HabitatDatasetV2
 from model import PoseEstimator
 
 
-dataset_path = "~/robo_project_ws/src/dataset"
+dataset_path = os.path.expanduser("~/robo_project_ws/src/dataset")
 dataset = HabitatDatasetV2(dataset_path)
 
 dataloader = DataLoader(

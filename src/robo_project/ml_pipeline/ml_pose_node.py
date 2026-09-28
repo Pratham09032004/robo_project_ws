@@ -31,9 +31,9 @@ class MLPoseNode(Node):
             )
         )
 
-        self.image_folder = self.get_parameter(
+        self.image_folder = os.path.expanduser(self.get_parameter(
             "image_folder"
-        ).value
+        ).value)
 
         self.image_files = sorted(
             os.listdir(self.image_folder)

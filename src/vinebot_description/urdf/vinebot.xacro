@@ -8,6 +8,7 @@
 <xacro:include filename="$(find vinebot_description)/urdf/ros2_control.xacro" />
 <xacro:include filename="$(find vinebot_description)/urdf/vinebot_d455.urdf.xacro" />
 <xacro:include filename="$(find vinebot_description)/urdf/imu.xacro" />
+<xacro:include filename="$(find vinebot_description)/urdf/vinebot_livox_mid40.xacro" />
 
 
 <link name="base_footprint">

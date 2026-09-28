@@ -3,9 +3,10 @@ from PIL import Image
 from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
-# Output path
-output_dir = "~/robo_project_ws/src/vineyard_world/materials/png"
+# Output path: src/vineyard_world/materials/png
+output_dir = str(Path(__file__).resolve().parents[1] / "materials" / "png")
 os.makedirs(output_dir, exist_ok=True)
 
 # Image dimensions

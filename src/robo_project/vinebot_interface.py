@@ -13,7 +13,25 @@ import sensor_msgs_py.point_cloud2 as pc2  # ROS 2: was sensor_msgs.point_cloud2
 import numpy as np
 import yaml, os, cv2
 from cv_bridge import CvBridge
-from bresenham import bresenham
+try:
+    from bresenham import bresenham
+except ImportError:
+    def bresenham(x0, y0, x1, y1):
+        """Integer cells on the line (x0, y0) -> (x1, y1); same output as the pip 'bresenham' package."""
+        dx, dy = abs(x1 - x0), -abs(y1 - y0)
+        sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+        err = dx + dy
+        while True:
+            yield x0, y0
+            if x0 == x1 and y0 == y1:
+                return
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx
+                y0 += sy
 from typing import Tuple
 
 from robo_project.scripts.config_loader import load_config
@@ -39,24 +57,23 @@ def show_images(event=None):
     """
     When running this as a standalone node, display result images.
     """
-    if __name__ == '__main__':
-        if g_lidar_local_occ_meas is not None:
-            cv2.namedWindow("LiDAR -> local occ meas (front = right)", cv2.WINDOW_NORMAL)
-            cv2.imshow("LiDAR -> local occ meas (front = right)", g_lidar_local_occ_meas)
+    if g_lidar_local_occ_meas is not None:
+        cv2.namedWindow("LiDAR -> local occ meas (front = right)", cv2.WINDOW_NORMAL)
+        cv2.imshow("LiDAR -> local occ meas (front = right)", g_lidar_local_occ_meas)
 
-        if g_depth_local_occ_meas is not None:
-            cv2.namedWindow("Depth Img -> local occ meas (front = right)", cv2.WINDOW_NORMAL)
-            cv2.imshow("Depth Img -> local occ meas (front = right)", g_depth_local_occ_meas)
+    if g_depth_local_occ_meas is not None:
+        cv2.namedWindow("Depth Img -> local occ meas (front = right)", cv2.WINDOW_NORMAL)
+        cv2.imshow("Depth Img -> local occ meas (front = right)", g_depth_local_occ_meas)
 
-        global g_pointcloud_msg
-        if g_pointcloud_msg is not None:
-            pc = g_pointcloud_msg
-            g_pointcloud_msg = None
-            get_local_occ_from_pointcloud(pc)
-            cv2.namedWindow("Pointcloud -> local occ meas (front = right)", cv2.WINDOW_NORMAL)
-            cv2.imshow("Pointcloud -> local occ meas (front = right)", g_pointcloud_local_occ_meas)
+    global g_pointcloud_msg
+    if g_pointcloud_msg is not None:
+        pc = g_pointcloud_msg
+        g_pointcloud_msg = None
+        get_local_occ_from_pointcloud(pc)
+        cv2.namedWindow("Pointcloud -> local occ meas (front = right)", cv2.WINDOW_NORMAL)
+        cv2.imshow("Pointcloud -> local occ meas (front = right)", g_pointcloud_local_occ_meas)
 
-        cv2.waitKey(100)
+    cv2.waitKey(100)
 
 
 def get_local_occ_from_lidar(msg: LaserScan):
@@ -215,19 +232,21 @@ def read_params():
 
 class LocobotInterfaceNode(Node):
     """
-    Standalone ROS 2 node for the locobot interface.
-    Only used when running this file directly as __main__.
+    Standalone ROS 2 node for the locobot interface
+    (ros2 run robo_project vinebot_interface).
     """
 
     def __init__(self):
         super().__init__('interface_node')
 
-        # Subscribers
-        # ROS 2: create_subscription(MsgType, topic, callback, qos)
+        # Subscribers. /camera/front/image_raw carries Images, not point clouds;
+        # the Livox lidar point cloud is bridged from Gazebo to /points.
+        self.declare_parameter("scan_topic", "/scan")
+        self.declare_parameter("pointcloud_topic", "/points")
         self.create_subscription(
-            LaserScan, "/scan", get_local_occ_from_lidar, 1)
+            LaserScan, self.get_parameter("scan_topic").value, get_local_occ_from_lidar, 1)
         self.create_subscription(
-            PointCloud2, "/camera/front/image_raw", get_pointcloud_msg, 1)
+            PointCloud2, self.get_parameter("pointcloud_topic").value, get_pointcloud_msg, 1)
 
         # Timer for displaying images when running standalone
         # ROS 2: create_timer(period_seconds, callback)

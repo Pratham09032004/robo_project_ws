@@ -7,9 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(xacro REQUIRED)
-find_package(robot_state_publisher REQUIRED)
-find_package(rviz2 REQUIRED)
+# xacro, robot_state_publisher, rviz2, Gazebo etc. are only needed at runtime (package.xml exec_depend).
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

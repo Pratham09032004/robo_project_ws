@@ -31,9 +31,12 @@ class PoseMonitorNode(Node):
             10
         )
 
+        # /odom is published by the Habitat bridge; use odom_topic:=/diff_cont/odom in Gazebo.
+        self.declare_parameter("odom_topic", "/odom")
+
         self.create_subscription(
             Odometry,
-            "/diff_cont/odom",
+            self.get_parameter("odom_topic").value,
             self.odom_callback,
             10
         )
@@ -89,11 +92,14 @@ def main(args=None):
 
     node = PoseMonitorNode()
 
-    rclpy.spin(node)
-
-    node.destroy_node()
-
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

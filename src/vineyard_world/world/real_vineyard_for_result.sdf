@@ -102,7 +102,7 @@
         <collision name="collision">
           <geometry>
             <heightmap>
-              <uri>/home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/materials/png/sommerach_vineyard_smooth_heightmap_512.png</uri>
+              <uri>model://vineyard_world/materials/png/sommerach_vineyard_smooth_heightmap_512.png</uri>
               <size>50.0 50.0 12.0</size>
               <pos>0 0 0</pos>
             </heightmap>
@@ -111,12 +111,12 @@
         <visual name="visual">
           <geometry>
             <heightmap>
-              <uri>/home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/materials/png/sommerach_vineyard_smooth_heightmap_512.png</uri>
+              <uri>model://vineyard_world/materials/png/sommerach_vineyard_smooth_heightmap_512.png</uri>
               <size>50.0 50.0 12.0</size>
               <pos>0 0 0</pos>
               <texture>
-                <diffuse>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/materials/textures/dirt4.png</diffuse>
-                <normal>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/materials/textures/dirt4.png</normal>
+                <diffuse>model://vineyard_world/materials/textures/dirt4.png</diffuse>
+                <normal>model://vineyard_world/materials/textures/dirt4.png</normal>
                 <size>1</size>
               </texture>
             </heightmap>
@@ -131,7 +131,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -139,7 +139,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -165,7 +165,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -173,7 +173,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -199,7 +199,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -207,7 +207,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -233,7 +233,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -241,7 +241,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -267,7 +267,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -275,7 +275,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -301,7 +301,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -309,7 +309,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -335,7 +335,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -343,7 +343,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -369,7 +369,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -377,7 +377,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -403,7 +403,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -411,7 +411,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -437,7 +437,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -445,7 +445,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -471,7 +471,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -479,7 +479,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -505,7 +505,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -513,7 +513,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -539,7 +539,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -547,7 +547,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -573,7 +573,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -581,7 +581,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -607,7 +607,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -615,7 +615,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -641,7 +641,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -649,7 +649,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -675,7 +675,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -683,7 +683,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -709,7 +709,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -717,7 +717,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -743,7 +743,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -751,7 +751,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -777,7 +777,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -785,7 +785,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -811,7 +811,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -819,7 +819,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -845,7 +845,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -853,7 +853,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -879,7 +879,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -887,7 +887,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -913,7 +913,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -921,7 +921,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -947,7 +947,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -955,7 +955,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -981,7 +981,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -989,7 +989,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1015,7 +1015,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1023,7 +1023,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1049,7 +1049,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1057,7 +1057,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1083,7 +1083,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1091,7 +1091,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1117,7 +1117,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1125,7 +1125,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1151,7 +1151,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1159,7 +1159,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1185,7 +1185,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1193,7 +1193,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1219,7 +1219,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1227,7 +1227,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1253,7 +1253,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1261,7 +1261,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1287,7 +1287,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1295,7 +1295,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1321,7 +1321,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1329,7 +1329,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1355,7 +1355,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1363,7 +1363,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1389,7 +1389,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1397,7 +1397,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1423,7 +1423,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1431,7 +1431,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1457,7 +1457,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1465,7 +1465,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1491,7 +1491,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1499,7 +1499,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1525,7 +1525,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1533,7 +1533,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1559,7 +1559,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1567,7 +1567,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1593,7 +1593,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1601,7 +1601,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_1.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_1.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1627,7 +1627,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1635,7 +1635,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1661,7 +1661,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1669,7 +1669,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1695,7 +1695,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1703,7 +1703,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1729,7 +1729,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1737,7 +1737,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1763,7 +1763,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1771,7 +1771,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1797,7 +1797,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1805,7 +1805,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1831,7 +1831,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1839,7 +1839,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1865,7 +1865,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1873,7 +1873,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1899,7 +1899,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1907,7 +1907,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1933,7 +1933,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1941,7 +1941,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1967,7 +1967,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -1975,7 +1975,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2001,7 +2001,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2009,7 +2009,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2035,7 +2035,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2043,7 +2043,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2069,7 +2069,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2077,7 +2077,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_4.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_4.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2103,7 +2103,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2111,7 +2111,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_2.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_2.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2137,7 +2137,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -2145,7 +2145,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>file:///home/vamsi/code/thesis/vineyard_ws/src/vineyard_world/mesh/Tree_3.obj</uri>
+              <uri>model://vineyard_world/mesh/Tree_3.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>

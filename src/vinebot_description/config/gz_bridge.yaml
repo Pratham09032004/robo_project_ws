@@ -1,10 +1,16 @@
+# Topics bridged from Gazebo to ROS 2 by ros_gz_bridge (started by launch_sim.launch.py).
+#
+# Odometry (/diff_cont/odom), /tf, /diff_cont/cmd_vel and /joint_states are handled by
+# ros2_control (diff_cont + joint_broad) and must NOT be bridged as well, otherwise two
+# publishers fight over the same topics.
+
 - ros_topic_name: "clock"
   gz_topic_name: "clock"
   ros_type_name: "rosgraph_msgs/msg/Clock"
   gz_type_name: "gz.msgs.Clock"
   direction: GZ_TO_ROS
 
-# gz topic published by Sensors plugin
+# Livox Mid-40 (urdf/vinebot_livox_mid40.xacro)
 - ros_topic_name: "scan"
   gz_topic_name: "scan"
   ros_type_name: "sensor_msgs/msg/LaserScan"
@@ -17,45 +23,9 @@
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
-# # gz topic published by Sensors plugin (Camera)
-# - ros_topic_name: "camera/camera_info"
-#   gz_topic_name: "camera/camera_info"
-#   ros_type_name: "sensor_msgs/msg/CameraInfo"
-#   gz_type_name: "gz.msgs.CameraInfo"
-#   direction: GZ_TO_ROS
-
-
-# gz topic published by DiffDrive plugin
-- ros_topic_name: "diff_cont/odom"
-  gz_topic_name: "odom"
-  ros_type_name: "nav_msgs/msg/Odometry"
-  gz_type_name: "gz.msgs.Odometry"
-  direction: GZ_TO_ROS
-
-# gz topic for IMU
+# IMU (urdf/imu.xacro publishes on gz topic "imu")
 - ros_topic_name: "imu"
-  gz_topic_name: "world/heightmap_world/model/vinebot/link/base_footprint/sensor/imu_sensor/imu"
+  gz_topic_name: "imu"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
-  direction: GZ_TO_ROS
-
-# gz topic published by DiffDrive plugin
-- ros_topic_name: "tf"
-  gz_topic_name: "tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
-
-# gz topic subscribed to by DiffDrive plugin
-- ros_topic_name: "diff_cont/cmd_vel"
-  gz_topic_name: "cmd_vel"
-  ros_type_name: "geometry_msgs/msg/TwistStamped"
-  gz_type_name: "gz.msgs.Twist"
-  direction: ROS_TO_GZ
-
-# gz topic published by JointState plugin
-- ros_topic_name: "joint_states"
-  gz_topic_name: "joint_states"
-  ros_type_name: "sensor_msgs/msg/JointState"
-  gz_type_name: "gz.msgs.Model"
   direction: GZ_TO_ROS

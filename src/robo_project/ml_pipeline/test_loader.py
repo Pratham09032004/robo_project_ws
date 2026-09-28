@@ -1,6 +1,8 @@
+import os
+
 from dataset_loader import HabitatDataset
 
-dataset_path = "~/robo_project_ws/src/dataset"
+dataset_path = os.path.expanduser("~/robo_project_ws/src/dataset")
 
 dataset = HabitatDataset(dataset_path)
 
