@@ -1,65 +1,66 @@
 #!/usr/bin/env python3
 
 """
-ROS 2 launch file for the CMN project.
-Replaces the ROS 1 .launch XML file.
+ROS 2 launch file for the Habitat VineBot navigation stack.
+
+Starts:
+  - map_server_node : the only publisher of /map and the static map -> odom TF
+  - motion_planner  : A* from /odom to the goal, publishes /planned_path
+                      (replans whenever a "2D Goal Pose" is clicked in RViz)
+  - runner_node     : follows /planned_path, publishes /cmd_vel
+
+The Habitat bridge (habitat_bridge_vinebot_2.py) is started separately, since
+it needs the conda environment with habitat_sim.
 
 Usage:
-  ros2 launch robo_project run.launch.py run_mode:=discrete use_sim:=true use_viz:=true
+  ros2 launch robo_project run.launch.py goal_x:=1.0 goal_y:=0.5
 """
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    # ── Declare launch arguments (replaces <arg> tags in ROS 1 .launch) ──
-    run_mode_arg = DeclareLaunchArgument(
-        'run_mode',
-        default_value='discrete',
-        description='Run mode: one of [continuous, discrete, discrete_random]'
-    )
-    use_sim_arg = DeclareLaunchArgument(
-        'use_sim',
-        default_value='false',
-        description='Use the simulator to generate ground truth observations'
-    )
-    use_viz_arg = DeclareLaunchArgument(
-        'use_viz',
-        default_value='false',
-        description='Show the live visualization window'
+    goal_x_arg = DeclareLaunchArgument(
+        'goal_x', default_value='0.0', description='Initial goal x in the map frame (m)')
+    goal_y_arg = DeclareLaunchArgument(
+        'goal_y', default_value='0.0', description='Initial goal y in the map frame (m)')
+
+    map_server_node = Node(
+        package='robo_project',
+        executable='map_server_node',
+        name='static_map_server_node',
+        output='screen',
+        emulate_tty=True,
     )
 
-    # ── Runner node ───────────────────────────────────────────────────────
+    motion_planner_node = Node(
+        package='robo_project',
+        executable='motion_planner',
+        name='motion_planner',
+        output='screen',
+        emulate_tty=True,
+        parameters=[{
+            'goal_x': ParameterValue(LaunchConfiguration('goal_x'), value_type=float),
+            'goal_y': ParameterValue(LaunchConfiguration('goal_y'), value_type=float),
+        }],
+    )
+
     runner_node = Node(
         package='robo_project',
         executable='runner_node',
         name='runner_node',
         output='screen',
         emulate_tty=True,   # Ensures coloured log output in the terminal.
-        parameters=[{
-            # These map to self.declare_parameter() calls in RunnerNode.__init__()
-            'run_mode': LaunchConfiguration('run_mode'),
-            'use_sim':  LaunchConfiguration('use_sim'),
-            'use_viz':  LaunchConfiguration('use_viz'),
-        }]
-    )
-
-    # ── Map Server node ───────────────────────────────────────────────────
-    map_server_node = Node(
-        package='robo_project',
-        executable='map_server_node',
-        name='static_map_server_node',
-        output='screen',
-        emulate_tty=True
     )
 
     return LaunchDescription([
-        run_mode_arg,
-        use_sim_arg,
-        use_viz_arg,
+        goal_x_arg,
+        goal_y_arg,
+        map_server_node,
+        motion_planner_node,
         runner_node,
-        map_server_node, # Automatically starts along with the runner node
     ])

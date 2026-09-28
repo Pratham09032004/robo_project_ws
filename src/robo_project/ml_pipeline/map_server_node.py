@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import StaticTransformBroadcaster
@@ -9,62 +10,77 @@ import numpy as np
 # Import your existing processor layout directly
 from robo_project.scripts.map_handler import MapFrameManager
 
+
+def build_occupancy_grid_msg(map_with_border: np.ndarray, resolution: float) -> OccupancyGrid:
+    """
+    Convert the MapFrameManager grid into a ROS OccupancyGrid that lines up
+    with MapFrameManager.transform_map_px_to_m()/transform_map_m_to_px().
+
+    Internal map: image rows (row 0 = top), 1 = free, anything else = occupied.
+    MapFrameManager world coords: x = res * (col - W//2), y = -res * (row - H//2).
+    ROS OccupancyGrid: row 0 is at origin.y (bottom), 0 = free, 100 = occupied.
+    So the image is flipped vertically and the origin is chosen such that
+    floor((y - origin_y) / res) == H - 1 - row for every map cell.
+    """
+    height, width = map_with_border.shape
+    msg = OccupancyGrid()
+    msg.header.frame_id = 'map'
+    msg.info.resolution = float(resolution)
+    msg.info.width = int(width)
+    msg.info.height = int(height)
+    msg.info.origin.position.x = float(-(width // 2) * resolution)
+    msg.info.origin.position.y = float(-(height - 1 - height // 2) * resolution)
+    msg.info.origin.position.z = 0.0
+    msg.info.origin.orientation.w = 1.0
+
+    ros_rows = np.flipud(map_with_border)
+    msg.data = np.where(ros_rows == 1, 0, 100).astype(np.int8).flatten().tolist()
+    return msg
+
+
 class StaticMapServerNode(Node):
+    """
+    The single publisher of /map and of the static map -> odom transform.
+    """
+
     def __init__(self):
         super().__init__('static_map_server_node')
-        
-        # Initialize your existing processor framework
-        # Defaulting to discrete space mapping layout matching your launches
+
         self.map_manager = MapFrameManager(use_discrete_state_space=True)
-        
-        # Publishers and Broadcasters
-        self.map_pub = self.create_publisher(OccupancyGrid, '/map', 10)
+
+        # Latched map: late subscribers (RViz, motion_planner) get it immediately.
+        # TRANSIENT_LOCAL publishers are also compatible with VOLATILE subscribers.
+        map_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.map_pub = self.create_publisher(OccupancyGrid, '/map', map_qos)
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
-        
-        # Timer to latch map publishing data across network channels
-        self.timer = self.create_timer(1.0, self.publish_map)
-        
-        # Broadcast standard static identity transforms connecting map coordinate spaces
+
+        self.map_msg = build_occupancy_grid_msg(
+            self.map_manager.map_with_border, self.map_manager.map_resolution_desired)
+
         self.broadcast_static_transforms()
-        self.get_logger().info("Static Map Server Node Initialized Successfully.")
+        self.publish_map()
+        # Republish periodically for tools that subscribe with VOLATILE durability.
+        self.timer = self.create_timer(1.0, self.publish_map)
+        self.get_logger().info(
+            f"Static map server publishing /map: {self.map_msg.info.width}x"
+            f"{self.map_msg.info.height} @ {self.map_msg.info.resolution} m/cell")
 
     def broadcast_static_transforms(self):
-        # Establish structural linking between global world 'map' and navigation 'odom'
+        # Habitat odometry is already expressed in the map frame, so map -> odom is identity.
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'map'
         t.child_frame_id = 'odom'
-        t.transform.translation.x = 0.0
-        t.transform.translation.y = 0.0
-        t.transform.translation.z = 0.0
         t.transform.rotation.w = 1.0
         self.tf_static_broadcaster.sendTransform(t)
 
     def publish_map(self):
-        msg = OccupancyGrid()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'map'
-        
-        # Build map metadata profile fields
-        # Invert downscale tracking to derive resolution scaling mapping safely
-        msg.info.resolution = float(self.map_manager.map_resolution_desired)
-        msg.info.width = self.map_manager.map_with_border.shape[1]
-        msg.info.height = self.map_manager.map_with_border.shape[0]
-        
-        # Align map array origin to match your custom pixel transform math bounds center
-        msg.info.origin.position.x = float(- (msg.info.width // 2) * msg.info.resolution)
-        msg.info.origin.position.y = float(- (msg.info.height // 2) * msg.info.resolution)
-        msg.info.origin.position.z = 0.0
-        msg.info.origin.orientation.w = 1.0
-        
-        # Translate internal map metrics cleanly:
-        # Internal space mapping uses: 1.0 = Free, 0.0 = Occupied
-        # Standard ROS occupancy grids map to: 0 = Free, 100 = Occupied, -1 = Unknown
-        flat_grid = self.map_manager.map_with_border.flatten()
-        ros_grid_data = np.where(flat_grid == 1.0, 0, 100).astype(np.int8)
-        
-        msg.data = ros_grid_data.tolist()
-        self.map_pub.publish(msg)
+        self.map_msg.header.stamp = self.get_clock().now().to_msg()
+        self.map_pub.publish(self.map_msg)
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -75,7 +91,9 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

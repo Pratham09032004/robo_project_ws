@@ -12,7 +12,8 @@ from nav_msgs.msg import Path, OccupancyGrid, Odometry
 from robo_project.scripts.astar import Astar
 from robo_project.scripts.basic_types import PosePixels
 
-# ── GOAL in world coordinates (meters) ───────────────────────────────────────
+# ── Default GOAL in world coordinates (meters) ───────────────────────────────
+# Override with the goal_x / goal_y parameters, or click "2D Goal Pose" in RViz.
 GOAL_X = 0.0   # meters
 GOAL_Y = 0.0   # meters
 
@@ -33,13 +34,24 @@ class MotionPlanner(Node):
         # separate copy of GOAL_X/GOAL_Y that could drift out of sync.
         self.goal_pub = self.create_publisher(PoseStamped, '/motion_planner_goal', path_qos)
 
+        self.declare_parameter('goal_x', GOAL_X)
+        self.declare_parameter('goal_y', GOAL_Y)
+        self.goal_x = float(self.get_parameter('goal_x').value)
+        self.goal_y = float(self.get_parameter('goal_y').value)
+
         self.grid = None
         self.map_resolution = None
         self.map_origin_x = None
         self.map_origin_y = None
         self.map_width = None
         self.map_height = None
-        self.create_subscription(OccupancyGrid, '/map', self.map_callback, 10)
+        # /map is latched by map_server_node (TRANSIENT_LOCAL).
+        map_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
+        self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
 
         self.robot_x = None
         self.robot_y = None
@@ -53,14 +65,14 @@ class MotionPlanner(Node):
         self.create_timer(2.0, self.republish_path)
 
         self.get_logger().info("motion_planner started. Waiting for /map and /odom...")
-        self.get_logger().info(f"Goal: x={GOAL_X}m, y={GOAL_Y}m")
+        self.get_logger().info(f"Goal: x={self.goal_x}m, y={self.goal_y}m")
 
     def _build_goal_msg(self):
         msg = PoseStamped()
         msg.header.frame_id = 'map'
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.pose.position.x = GOAL_X
-        msg.pose.position.y = GOAL_Y
+        msg.pose.position.x = self.goal_x
+        msg.pose.position.y = self.goal_y
         msg.pose.orientation.w = 1.0
         return msg
 
@@ -81,6 +93,15 @@ class MotionPlanner(Node):
             f"res={self.map_resolution}m origin=({self.map_origin_x:.2f},"
             f"{self.map_origin_y:.2f})")
 
+    def goal_callback(self, msg: PoseStamped):
+        """New goal from RViz "2D Goal Pose": replan from the current pose."""
+        self.goal_x = float(msg.pose.position.x)
+        self.goal_y = float(msg.pose.position.y)
+        self.goal_msg = self._build_goal_msg()
+        self.goal_pub.publish(self.goal_msg)
+        self.get_logger().info(f"New goal from /goal_pose: x={self.goal_x:.2f}m, y={self.goal_y:.2f}m")
+        self.planned = False
+
     def odom_callback(self, msg: Odometry):
         self.robot_x = float(msg.pose.pose.position.x)
         self.robot_y = float(msg.pose.pose.position.y)
@@ -90,15 +111,16 @@ class MotionPlanner(Node):
     # hardcoded separately, so it can't drift out of sync.
 
     def world_to_pixel(self, x: float, y: float):
-        col = int((x - self.map_origin_x) / self.map_resolution)
-        row = int((y - self.map_origin_y) / self.map_resolution)
+        col = int(math.floor((x - self.map_origin_x) / self.map_resolution))
+        row = int(math.floor((y - self.map_origin_y) / self.map_resolution))
         row = max(0, min(self.map_height - 1, row))
         col = max(0, min(self.map_width - 1, col))
         return row, col
 
     def pixel_to_world(self, row: int, col: int):
-        x = self.map_origin_x + col * self.map_resolution
-        y = self.map_origin_y + row * self.map_resolution
+        # Cell centre, so waypoints sit in the middle of free cells.
+        x = self.map_origin_x + (col + 0.5) * self.map_resolution
+        y = self.map_origin_y + (row + 0.5) * self.map_resolution
         return x, y
 
     # ── Planning ──────────────────────────────────────────────────────────────
@@ -121,21 +143,20 @@ class MotionPlanner(Node):
 
     def run_astar_and_publish(self):
         start_row, start_col = self.world_to_pixel(self.robot_x, self.robot_y)
-        goal_row, goal_col = self.world_to_pixel(GOAL_X, GOAL_Y)
+        goal_row, goal_col = self.world_to_pixel(self.goal_x, self.goal_y)
 
         self.get_logger().info(
             f"Start: world=({self.robot_x:.2f},{self.robot_y:.2f}) "
             f"-> pixel=({start_row},{start_col}) "
             f"value={self.grid[start_row, start_col]}")
         self.get_logger().info(
-            f"Goal:  world=({GOAL_X:.2f},{GOAL_Y:.2f}) "
+            f"Goal:  world=({self.goal_x:.2f},{self.goal_y:.2f}) "
             f"-> pixel=({goal_row},{goal_col}) "
             f"value={self.grid[goal_row, goal_col]}")
 
-        # Raw /map data used directly — no transformation.
-        # in_collision() checks value==0, and this map already has
-        # wall=0, free=100, matching perfectly (see module docstring).
-        astar_map = self.grid
+        # /map uses the ROS convention (0 = free, 100 = occupied, -1 = unknown).
+        # Astar treats 0 as a wall and anything else as free, so convert.
+        astar_map = (self.grid == 0).astype(np.int8)
 
         start_row, start_col = self._snap_to_free(astar_map, start_row, start_col)
         goal_row, goal_col = self._snap_to_free(astar_map, goal_row, goal_col)
@@ -151,7 +172,7 @@ class MotionPlanner(Node):
 
         if not path:
             self.get_logger().error(
-                "A* found NO PATH. Check GOAL_X/GOAL_Y are in free space.")
+                "A* found NO PATH. Check the goal is in free space.")
             return
 
         # astar_simple.run_astar returns the path REVERSED (goal->start),
