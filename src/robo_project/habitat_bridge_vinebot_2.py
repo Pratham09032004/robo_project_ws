@@ -19,6 +19,31 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 ENVIRONMENT_DIR = SCRIPT_DIR.parent.parent / "src" / "environment" 
 MODEL_PATH = str(ENVIRONMENT_DIR / "IMR_lab8.glb")
 
+
+def habitat_heading_to_ros_yaw(rotation):
+    """
+    Convert a Habitat agent rotation into a yaw in the ROS map frame.
+
+    Positions are published as ros_x = habitat_x, ros_y = habitat_z (see
+    resources/habitat_map_metadata.json). Habitat agents face -Z and turn
+    about +Y, so copying the quaternion's y/w into a ROS z/w quaternion gives
+    a heading that is off by -90 deg and mirrored. Instead, rotate the
+    agent's forward vector (0, 0, -1) and measure its angle in the same
+    (x, z) plane the position uses.
+    """
+    try:
+        w = float(rotation.scalar)
+        x, y, z = (float(v) for v in rotation.vector)
+    except AttributeError:
+        w, x, y, z = float(rotation.w), float(rotation.x), float(rotation.y), float(rotation.z)
+
+    # v' = v + 2w(u x v) + 2u x (u x v), with u = (x, y, z), v = (0, 0, -1)
+    cx, cy, cz = -y, x, 0.0
+    ccx, ccz = y * cz - z * cy, x * cy - y * cx
+    fwd_x = 2.0 * (w * cx + ccx)
+    fwd_z = -1.0 + 2.0 * (w * cz + ccz)
+    return float(np.arctan2(fwd_z, fwd_x))
+
 class VinebotHabitatBridge(Node):
     def __init__(self):
         super().__init__('habitat_bridge')
@@ -80,11 +105,14 @@ class VinebotHabitatBridge(Node):
         # was being silently dropped every time the robot moved forward.
         # Now angular is applied independently so steering-while-driving
         # actually works.
+        # The ROS frame (x = habitat_x, y = habitat_z) is mirrored relative
+        # to Habitat, so Habitat's turn_left is a clockwise (negative yaw)
+        # turn in ROS. A positive (CCW) angular.z therefore maps to turn_right.
         if abs(msg.angular.z) > 0.01:
             if msg.angular.z > 0:
-                self.agent.act("turn_left")
-            else:
                 self.agent.act("turn_right")
+            else:
+                self.agent.act("turn_left")
 
         if msg.linear.x > 0.01:
             pos_before = self.agent.get_state().position.copy()
@@ -194,13 +222,10 @@ class VinebotHabitatBridge(Node):
         odom_msg.pose.pose.position.y = float(state.position[2])
         odom_msg.pose.pose.position.z = 0.0
         
-        # Extract true rotation
-        try:
-            odom_msg.pose.pose.orientation.z = float(state.rotation.vector.y)
-            odom_msg.pose.pose.orientation.w = float(state.rotation.scalar)
-        except AttributeError:
-            odom_msg.pose.pose.orientation.z = float(state.rotation.y)
-            odom_msg.pose.pose.orientation.w = float(state.rotation.w)
+        # Heading expressed in the same frame as the position above.
+        yaw = habitat_heading_to_ros_yaw(state.rotation)
+        odom_msg.pose.pose.orientation.z = float(np.sin(yaw / 2.0))
+        odom_msg.pose.pose.orientation.w = float(np.cos(yaw / 2.0))
             
         self.odom_pub.publish(odom_msg)
 
