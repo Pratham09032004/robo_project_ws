@@ -6,7 +6,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 
-from geometry_msgs.msg import Twist, PoseStamped, TransformStamped
+from geometry_msgs.msg import Twist, PoseStamped, PointStamped, TransformStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from tf2_ros import TransformBroadcaster
 
@@ -24,6 +24,23 @@ from robo_project.scripts.basic_types import PoseMeters, PosePixels
 MAP_RESOLUTION = 0.02       # must match the resolution in publish_map()
 FORWARD_LOOKAHEAD_M = 0.10  # don't drive forward if the cell this far ahead is not free
 STOP_WHEN_OUTSIDE = True    # stop the robot if it is already outside free space
+
+# ── Path follower tuning ──────────────────────────────────────────────────────
+WAYPOINT_TOLERANCE_M = 0.15  # waypoint counts as reached within this distance
+GOAL_TOLERANCE_M = 0.10      # final waypoint (the goal) tolerance
+LIN_VEL = 0.3                # m/s when driving
+MAX_ANG_VEL = 0.8            # rad/s
+ANG_GAIN = 1.5               # angular.z = ANG_GAIN * heading error (clamped)
+TURN_IN_PLACE_ERR = 0.35     # rad (~20 deg): turn on the spot above this heading error
+
+# ── Stall detection ───────────────────────────────────────────────────────────
+# The hand-drawn map is only approximate: Habitat can have an obstacle where
+# the sketch shows free space.  If the robot is commanded forward but does not
+# move, report the spot in front of it on /blocked_point; motion_planner marks
+# it as an obstacle and re-plans from the current pose.
+STALL_TIME_S = 1.5           # no progress for this long while driving -> stalled
+STALL_MIN_PROGRESS_M = 0.05
+BLOCKED_AHEAD_M = 0.25       # reported obstacle position: this far ahead of the robot
 
 
 class RunnerNode(Node):
@@ -54,6 +71,8 @@ class RunnerNode(Node):
         # (not just the full static path from motion_planner).
         self.current_waypoint_pub = self.create_publisher(
             PoseStamped, '/runner_current_waypoint', 10)
+        self.blocked_pub = self.create_publisher(PointStamped, '/blocked_point', 10)
+        self._stall_ref = None  # (time, x, y) when forward driving started/progressed
 
         self.cb_group = ReentrantCallbackGroup()
 
@@ -140,7 +159,10 @@ class RunnerNode(Node):
         msg.info.origin.position.y = float(-(grid_map.shape[0] / 2.0) * resolution)
         msg.info.origin.orientation.w = 1.0
 
-        msg.data = np.where(grid_map == 1, 100, 0).astype(np.int8).flatten().tolist()
+        # Standard ROS values: 0 = free, 100 = occupied.  OccupancyGrid row 0
+        # is the BOTTOM (smallest y) while image row 0 is the top of the
+        # sketch, so flip vertically - otherwise RViz shows the map mirrored.
+        msg.data = np.where(np.flipud(grid_map) == 1, 0, 100).astype(np.int8).flatten().tolist()
         self.map_pub.publish(msg)
 
         if not self.map_published_once:
@@ -202,30 +224,11 @@ class RunnerNode(Node):
 
     def rviz_goal_callback(self, msg):
         self.goal_received = True
-        print("🎯 Goal received from RViz.", flush=True)
-        print("Goal pose received on /goal_pose", flush=True)
-
-        if not self.setup_complete or self.mfm is None:
-            print("❌ Goal ignored: Map Frame Manager not ready.", flush=True)
-            return
-
-        pose_m = PoseMeters(float(msg.pose.position.x), float(msg.pose.position.y), 0.0)
-        raw_goal_px = self.mfm.transform_pose_m_to_px(pose_m)
-        goal_px = self._nearest_free_pose_px(raw_goal_px, max_radius=150)
-
-        if goal_px is None:
-            print("❌ Goal ignored: could not convert goal pose to map pixel.", flush=True)
-            return
-
-        print(
-            f"🎯 Goal mapped: raw_px=({int(raw_goal_px.r)}, {int(raw_goal_px.c)}) "
-            f"→ free_px=({int(goal_px.r)}, {int(goal_px.c)})",
-            flush=True
-        )
-
-        self.current_goal_px = goal_px
-        self.goal_received = True
-        print("✅ Goal set from RViz goal_pose", flush=True)
+        # motion_planner subscribes to /goal_pose too: it re-plans from the
+        # current pose and publishes the new /planned_path, which
+        # path_callback() then follows.
+        print(f"🎯 Goal received from RViz: ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f}) "
+              f"— waiting for motion_planner to re-plan.", flush=True)
 
     def _publish_stable_rviz_tf_timer(self):
         """
@@ -291,6 +294,7 @@ class RunnerNode(Node):
         self.path = new_path
         self.waypoint_idx = 0
         self.path_goal_reached = False
+        self._stall_ref = None
         print(f"Path received from motion_planner: {len(self.path)} waypoints. Following now.", flush=True)
 
     def path_follow_loop(self):
@@ -313,10 +317,21 @@ class RunnerNode(Node):
                 f"Stopped. Move it back inside (or restart the bridge).")
             return
 
+        # Skip every waypoint already within tolerance (the planner's path is
+        # dense - one point per 2 cm cell - so many are passed per tick).
+        while self.waypoint_idx < len(self.path):
+            wx, wy = self.path[self.waypoint_idx]
+            is_last = self.waypoint_idx == len(self.path) - 1
+            tol = GOAL_TOLERANCE_M if is_last else WAYPOINT_TOLERANCE_M
+            if math.hypot(wx - rx, wy - ry) >= tol:
+                break
+            self.waypoint_idx += 1
+            self._log_throttled("wp", f"Waypoint {self.waypoint_idx}/{len(self.path)} reached.")
+
         if self.waypoint_idx >= len(self.path):
             self._publish_cmd_vel(0.0, 0.0)
             self.path_goal_reached = True
-            print("GOAL REACHED! Robot stopped.", flush=True)
+            print(f"GOAL REACHED! Robot stopped at ({rx:.2f},{ry:.2f}).", flush=True)
             return
 
         wx, wy = self.path[self.waypoint_idx]
@@ -331,11 +346,6 @@ class RunnerNode(Node):
         self.current_waypoint_pub.publish(wp_msg)
 
         dist = math.hypot(wx - rx, wy - ry)
-
-        if dist < 0.15:
-            self.waypoint_idx += 1
-            print(f"Waypoint {self.waypoint_idx}/{len(self.path)} reached.", flush=True)
-            return
 
         angle_to_wp = math.atan2(wy - ry, wx - rx)
         angle_err = self._wrap_angle(angle_to_wp - ryaw)
@@ -352,8 +362,11 @@ class RunnerNode(Node):
                 flush=True)
             self._last_steer_log = now
 
-        if abs(angle_err) > 0.15:
-            ang = 0.5 if angle_err > 0 else -0.5
+        # Proportional steering (a fixed +-0.5 rad/s with a tight threshold
+        # overshoots and wiggles left/right around the heading).
+        ang = max(-MAX_ANG_VEL, min(MAX_ANG_VEL, ANG_GAIN * angle_err))
+        if abs(angle_err) > TURN_IN_PLACE_ERR:
+            self._stall_ref = None
             self._publish_cmd_vel(0.0, ang)
         else:
             # GUARD 2: the cell just ahead is wall/void -> don't step into it.
@@ -365,8 +378,38 @@ class RunnerNode(Node):
                     "blocked",
                     f"🚧 Blocked: cell {FORWARD_LOOKAHEAD_M:.2f} m ahead of "
                     f"({rx:.2f},{ry:.2f}) is not free. Not driving forward.")
+                self._report_blocked(rx, ry, ryaw)
                 return
-            self._publish_cmd_vel(0.3, 0.5 * angle_err)
+            self._publish_cmd_vel(LIN_VEL, ang)
+            self._check_stall(rx, ry, ryaw)
+
+    def _check_stall(self, rx: float, ry: float, ryaw: float):
+        now = time.time()
+        if self._stall_ref is None:
+            self._stall_ref = (now, rx, ry)
+            return
+        t0, x0, y0 = self._stall_ref
+        if math.hypot(rx - x0, ry - y0) > STALL_MIN_PROGRESS_M:
+            self._stall_ref = (now, rx, ry)
+        elif now - t0 > STALL_TIME_S:
+            print(f"⛔ Stalled at ({rx:.2f},{ry:.2f}): something in Habitat blocks the way "
+                  f"that is not on the map.", flush=True)
+            self._report_blocked(rx, ry, ryaw)
+
+    def _report_blocked(self, rx: float, ry: float, ryaw: float):
+        """Stop, publish the blocked spot ahead of the robot and wait for a new path."""
+        self._publish_cmd_vel(0.0, 0.0)
+        msg = PointStamped()
+        msg.header.frame_id = 'map'
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.point.x = rx + BLOCKED_AHEAD_M * math.cos(ryaw)
+        msg.point.y = ry + BLOCKED_AHEAD_M * math.sin(ryaw)
+        self.blocked_pub.publish(msg)
+        print(f"   Reported obstacle at ({msg.point.x:.2f},{msg.point.y:.2f}) — asking motion_planner to re-plan.",
+              flush=True)
+        # Pause following until the re-planned path arrives (path_callback).
+        self.path = []
+        self._stall_ref = None
 
     # ── Keep-inside-the-room guard ───────────────────────────────────────────
 
@@ -378,8 +421,8 @@ class RunnerNode(Node):
             return True  # map not loaded yet: don't block anything
         grid = self.mfm.map
         H, W = grid.shape
-        col = int(x / MAP_RESOLUTION + W / 2.0)
-        row = int(y / MAP_RESOLUTION + H / 2.0)
+        col = math.floor(x / MAP_RESOLUTION + W / 2.0)
+        row = H - 1 - math.floor(y / MAP_RESOLUTION + H / 2.0)  # image rows are flipped vs /map
         if not (0 <= row < H and 0 <= col < W):
             return False
         return grid[row, col] == 1
