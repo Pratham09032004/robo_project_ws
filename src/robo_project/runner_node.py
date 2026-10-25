@@ -23,23 +23,26 @@ from robo_project.scripts.basic_types import PoseMeters, PosePixels
 # agree about what is free space.  Internal convention: 1 = free, 0 = wall.
 MAP_RESOLUTION = 0.02       # must match the resolution in publish_map()
 FORWARD_LOOKAHEAD_M = 0.10  # don't drive forward if the cell this far ahead is not free
-STOP_WHEN_OUTSIDE = True    # stop the robot if it is already outside free space
 
 # ── Path follower tuning ──────────────────────────────────────────────────────
-WAYPOINT_TOLERANCE_M = 0.15  # waypoint counts as reached within this distance
+WAYPOINT_TOLERANCE_M = 0.25  # intermediate waypoint counts as reached within this distance
+WAYPOINT_PASSED_M = 0.40     # ...or within this distance once it is behind the robot
 GOAL_TOLERANCE_M = 0.10      # final waypoint (the goal) tolerance
 LIN_VEL = 0.3                # m/s when driving
+MIN_LIN_VEL = 0.1            # m/s: slow down to this when approaching the goal
 MAX_ANG_VEL = 0.8            # rad/s
 ANG_GAIN = 1.5               # angular.z = ANG_GAIN * heading error (clamped)
 TURN_IN_PLACE_ERR = 0.35     # rad (~20 deg): turn on the spot above this heading error
 
 # ── Stall detection ───────────────────────────────────────────────────────────
 # The hand-drawn map is only approximate: Habitat can have an obstacle where
-# the sketch shows free space.  If the robot is commanded forward but does not
-# move, report the spot in front of it on /blocked_point; motion_planner marks
-# it as an obstacle and re-plans from the current pose.
-STALL_TIME_S = 1.5           # no progress for this long while driving -> stalled
-STALL_MIN_PROGRESS_M = 0.05
+# the sketch shows free space.  While driving forward, compare how far the
+# robot was commanded to go with how far it actually moved ALONG ITS HEADING
+# (Habitat lets a blocked robot slide sideways along a wall, so plain movement
+# is not enough).  If it is far less, report the spot ahead on /blocked_point;
+# motion_planner marks it as an obstacle and re-plans from the current pose.
+STALL_WINDOW_M = 0.40        # judge after this much commanded forward driving
+STALL_MIN_RATIO = 0.30       # stalled if actual forward motion < 30% of commanded
 BLOCKED_AHEAD_M = 0.25       # reported obstacle position: this far ahead of the robot
 
 
@@ -72,7 +75,7 @@ class RunnerNode(Node):
         self.current_waypoint_pub = self.create_publisher(
             PoseStamped, '/runner_current_waypoint', 10)
         self.blocked_pub = self.create_publisher(PointStamped, '/blocked_point', 10)
-        self._stall_ref = None  # (time, x, y) when forward driving started/progressed
+        self._reset_stall()
 
         self.cb_group = ReentrantCallbackGroup()
 
@@ -294,7 +297,7 @@ class RunnerNode(Node):
         self.path = new_path
         self.waypoint_idx = 0
         self.path_goal_reached = False
-        self._stall_ref = None
+        self._reset_stall()
         print(f"Path received from motion_planner: {len(self.path)} waypoints. Following now.", flush=True)
 
     def path_follow_loop(self):
@@ -308,22 +311,31 @@ class RunnerNode(Node):
         ry = float(odom_msg.pose.pose.position.y)
         ryaw = self.robot_yaw
 
-        # GUARD 1: robot is already outside the free area -> stop, don't drive further.
-        if STOP_WHEN_OUTSIDE and not self._is_free_world(rx, ry):
-            self._publish_cmd_vel(0.0, 0.0)
+        # GUARD 1: robot is outside the free area of the sketch (Habitat's floor
+        # can extend past a drawn wall).  Don't stop for good: the planned path
+        # starts at the nearest free cell, so keep following it back inside;
+        # only the look-ahead check (GUARD 2) is skipped while outside.
+        outside = not self._is_free_world(rx, ry)
+        if outside:
             self._log_throttled(
                 "outside",
-                f"🛑 Robot at ({rx:.2f},{ry:.2f}) is OUTSIDE the free area of the map. "
-                f"Stopped. Move it back inside (or restart the bridge).")
-            return
+                f"⚠️ Robot at ({rx:.2f},{ry:.2f}) is outside the free area of the map — "
+                f"driving back along the path.")
 
         # Skip every waypoint already within tolerance (the planner's path is
         # dense - one point per 2 cm cell - so many are passed per tick).
         while self.waypoint_idx < len(self.path):
             wx, wy = self.path[self.waypoint_idx]
             is_last = self.waypoint_idx == len(self.path) - 1
-            tol = GOAL_TOLERANCE_M if is_last else WAYPOINT_TOLERANCE_M
-            if math.hypot(wx - rx, wy - ry) >= tol:
+            d = math.hypot(wx - rx, wy - ry)
+            if is_last:
+                reached = d < GOAL_TOLERANCE_M
+            else:
+                # Also count a nearby waypoint that is already behind the robot
+                # as passed; otherwise the robot circles around it.
+                behind = abs(self._wrap_angle(math.atan2(wy - ry, wx - rx) - ryaw)) > math.pi / 2
+                reached = d < WAYPOINT_TOLERANCE_M or (behind and d < WAYPOINT_PASSED_M)
+            if not reached:
                 break
             self.waypoint_idx += 1
             self._log_throttled("wp", f"Waypoint {self.waypoint_idx}/{len(self.path)} reached.")
@@ -365,14 +377,16 @@ class RunnerNode(Node):
         # Proportional steering (a fixed +-0.5 rad/s with a tight threshold
         # overshoots and wiggles left/right around the heading).
         ang = max(-MAX_ANG_VEL, min(MAX_ANG_VEL, ANG_GAIN * angle_err))
+        if self._check_stall(rx, ry, ryaw):
+            return
+
         if abs(angle_err) > TURN_IN_PLACE_ERR:
-            self._stall_ref = None
             self._publish_cmd_vel(0.0, ang)
         else:
             # GUARD 2: the cell just ahead is wall/void -> don't step into it.
             ahead_x = rx + FORWARD_LOOKAHEAD_M * math.cos(ryaw)
             ahead_y = ry + FORWARD_LOOKAHEAD_M * math.sin(ryaw)
-            if not self._is_free_world(ahead_x, ahead_y):
+            if not outside and not self._is_free_world(ahead_x, ahead_y):
                 self._publish_cmd_vel(0.0, 0.0)
                 self._log_throttled(
                     "blocked",
@@ -380,36 +394,52 @@ class RunnerNode(Node):
                     f"({rx:.2f},{ry:.2f}) is not free. Not driving forward.")
                 self._report_blocked(rx, ry, ryaw)
                 return
-            self._publish_cmd_vel(LIN_VEL, ang)
-            self._check_stall(rx, ry, ryaw)
+            lin = LIN_VEL
+            if self.waypoint_idx == len(self.path) - 1:
+                lin = max(MIN_LIN_VEL, min(LIN_VEL, dist))  # slow down for the goal
+            self._publish_cmd_vel(lin, ang)
+            self._drive_prev = (time.time(), rx, ry, ryaw, lin)
 
-    def _check_stall(self, rx: float, ry: float, ryaw: float):
+    def _reset_stall(self):
+        self._drive_prev = None   # (time, x, y, yaw, commanded speed) of the last forward command
+        self._stall_expected = 0.0
+        self._stall_actual = 0.0
+
+    def _check_stall(self, rx: float, ry: float, ryaw: float) -> bool:
+        """True (and obstacle reported) if commanded forward driving did not move
+        the robot forward along its heading."""
         now = time.time()
-        if self._stall_ref is None:
-            self._stall_ref = (now, rx, ry)
-            return
-        t0, x0, y0 = self._stall_ref
-        if math.hypot(rx - x0, ry - y0) > STALL_MIN_PROGRESS_M:
-            self._stall_ref = (now, rx, ry)
-        elif now - t0 > STALL_TIME_S:
-            print(f"⛔ Stalled at ({rx:.2f},{ry:.2f}): something in Habitat blocks the way "
-                  f"that is not on the map.", flush=True)
-            self._report_blocked(rx, ry, ryaw)
+        prev = self._drive_prev
+        self._drive_prev = None
+        if prev is not None:
+            t0, x0, y0, yaw0, v = prev
+            self._stall_expected += v * (now - t0)
+            self._stall_actual += (rx - x0) * math.cos(yaw0) + (ry - y0) * math.sin(yaw0)
+        if self._stall_expected < STALL_WINDOW_M:
+            return False
+        expected, actual = self._stall_expected, self._stall_actual
+        self._reset_stall()
+        if actual >= STALL_MIN_RATIO * expected:
+            return False
+        print(f"⛔ Stalled at ({rx:.2f},{ry:.2f}): drove {actual:.2f} m of {expected:.2f} m commanded — "
+              f"something in Habitat blocks the way that is not on the map.", flush=True)
+        self._report_blocked(rx, ry, ryaw)
+        return True
 
-    def _report_blocked(self, rx: float, ry: float, ryaw: float):
-        """Stop, publish the blocked spot ahead of the robot and wait for a new path."""
+    def _report_blocked(self, rx: float, ry: float, direction: float):
+        """Stop, publish the blocked spot in `direction` from the robot and wait for a new path."""
         self._publish_cmd_vel(0.0, 0.0)
         msg = PointStamped()
         msg.header.frame_id = 'map'
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.point.x = rx + BLOCKED_AHEAD_M * math.cos(ryaw)
-        msg.point.y = ry + BLOCKED_AHEAD_M * math.sin(ryaw)
+        msg.point.x = rx + BLOCKED_AHEAD_M * math.cos(direction)
+        msg.point.y = ry + BLOCKED_AHEAD_M * math.sin(direction)
         self.blocked_pub.publish(msg)
         print(f"   Reported obstacle at ({msg.point.x:.2f},{msg.point.y:.2f}) — asking motion_planner to re-plan.",
               flush=True)
         # Pause following until the re-planned path arrives (path_callback).
         self.path = []
-        self._stall_ref = None
+        self._reset_stall()
 
     # ── Keep-inside-the-room guard ───────────────────────────────────────────
 

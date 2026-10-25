@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist, TransformStamped
 from nav_msgs.msg import Odometry
@@ -13,6 +14,7 @@ import numpy as np
 import cv2
 import math
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -85,7 +87,14 @@ class VinebotHabitatBridge(Node):
 
         # TF Broadcaster to move the robot in RViz
         self.tf_broadcaster = TransformBroadcaster(self)
-        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
+        # Queue depth 1: only the newest velocity command matters.
+        # ROS callbacks are spun on a background thread (see main()), so a new
+        # command is stored immediately; the simulator itself runs in run_loop()
+        # on the main thread (its OpenGL context belongs to that thread).  With
+        # ROS timers driving the simulator, the always-overdue timers were served
+        # before /cmd_vel and commands reached the robot ~1 s late, which made
+        # the path follower overshoot.
+        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 1)
 
         # File Existence Check
         if not os.path.exists(MODEL_PATH):
@@ -103,9 +112,22 @@ class VinebotHabitatBridge(Node):
         self.last_motion_time = time.monotonic()
         self._blocked_since = None
 
-        self.create_timer(0.02, self.motion_callback)   # motion + /odom + TF
-        self.create_timer(0.1, self.timer_callback)     # cameras
         self.get_logger().info("✅ Habitat Bridge fully initialized with IMR Lab 8.")
+
+    MOTION_PERIOD = 0.02   # s - motion + /odom + TF
+    CAMERA_PERIOD = 0.1    # s - camera images (+ preview window)
+
+    def run_loop(self):
+        """Simulator loop on the main thread: motion every MOTION_PERIOD, cameras
+        every CAMERA_PERIOD."""
+        next_camera = time.monotonic()
+        while rclpy.ok():
+            start = time.monotonic()
+            self.motion_callback()
+            if start >= next_camera:
+                self.timer_callback()
+                next_camera = start + self.CAMERA_PERIOD
+            time.sleep(max(0.0, self.MOTION_PERIOD - (time.monotonic() - start)))
 
     def setup_habitat(self):
         backend_cfg = habitat_sim.SimulatorConfiguration()
@@ -279,8 +301,11 @@ class VinebotHabitatBridge(Node):
 def main(args=None):
     rclpy.init(args=args)
     bridge = VinebotHabitatBridge()
+    executor = SingleThreadedExecutor()
+    executor.add_node(bridge)
+    threading.Thread(target=executor.spin, daemon=True).start()   # /cmd_vel callbacks
     try:
-        rclpy.spin(bridge)
+        bridge.run_loop()
     except KeyboardInterrupt:
         pass
     finally:
