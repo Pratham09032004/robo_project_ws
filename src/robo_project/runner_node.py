@@ -17,6 +17,15 @@ import numpy as np
 from robo_project.scripts.map_handler import MapFrameManager
 from robo_project.scripts.basic_types import PoseMeters, PosePixels
 
+# ── Keep-inside-the-room guard ────────────────────────────────────────────────
+# Uses the SAME grid, resolution and origin that publish_map() sends on /map
+# (and that motion_planner.py plans on), so the guard and the planner always
+# agree about what is free space.  Internal convention: 1 = free, 0 = wall.
+MAP_RESOLUTION = 0.02       # must match the resolution in publish_map()
+FORWARD_LOOKAHEAD_M = 0.10  # don't drive forward if the cell this far ahead is not free
+STOP_WHEN_OUTSIDE = True    # stop the robot if it is already outside free space
+
+
 class RunnerNode(Node):
     def __init__(self):
         super().__init__('runner_node')
@@ -118,19 +127,11 @@ class RunnerNode(Node):
         grid_map = self.mfm.map
         if grid_map is None: return
 
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = 'map'
-        t.child_frame_id = 'odom'
-        t.transform.translation.x = 0.0
-        t.transform.translation.y = 0.0
-        t.transform.translation.z = 0.0
-        t.transform.rotation.w = 1.0
-        self.tf_broadcaster.sendTransform(t)
-
+        # map -> odom is published by _publish_stable_rviz_tf_timer (20 Hz);
+        # not repeated here, so it has a single source.
         msg = OccupancyGrid()
         msg.header.frame_id = 'map'
-        msg.header.stamp = t.header.stamp
+        msg.header.stamp = self.get_clock().now().to_msg()
         resolution = 0.02
         msg.info.resolution = resolution
         msg.info.height = int(grid_map.shape[0])
@@ -249,22 +250,11 @@ class RunnerNode(Node):
             t_map_odom.transform.rotation.z = 0.0
             t_map_odom.transform.rotation.w = 1.0
 
-            transforms = [t_map_odom]
-
-            # odom -> base_footprint from latest Habitat odom
-            msg = getattr(self, "latest_odom_msg_for_tf", None)
-            if msg is not None:
-                t_odom_base = TransformStamped()
-                t_odom_base.header.stamp = now
-                t_odom_base.header.frame_id = "odom"
-                t_odom_base.child_frame_id = "base_footprint"
-                t_odom_base.transform.translation.x = float(msg.pose.pose.position.x)
-                t_odom_base.transform.translation.y = float(msg.pose.pose.position.y)
-                t_odom_base.transform.translation.z = float(msg.pose.pose.position.z)
-                t_odom_base.transform.rotation = msg.pose.pose.orientation
-                transforms.append(t_odom_base)
-
-            self.tf_broadcaster.sendTransform(transforms)
+            # NOTE: odom -> base_footprint is deliberately NOT published here.
+            # habitat_bridge already publishes it (same data, from the simulator),
+            # and two publishers of the same transform make RViz jitter.
+            # runner_node owns ONLY map -> odom.
+            self.tf_broadcaster.sendTransform([t_map_odom])
 
         except Exception as e:
             if not hasattr(self, "_stable_rviz_tf_warned"):
@@ -314,6 +304,15 @@ class RunnerNode(Node):
         ry = float(odom_msg.pose.pose.position.y)
         ryaw = self.robot_yaw
 
+        # GUARD 1: robot is already outside the free area -> stop, don't drive further.
+        if STOP_WHEN_OUTSIDE and not self._is_free_world(rx, ry):
+            self._publish_cmd_vel(0.0, 0.0)
+            self._log_throttled(
+                "outside",
+                f"🛑 Robot at ({rx:.2f},{ry:.2f}) is OUTSIDE the free area of the map. "
+                f"Stopped. Move it back inside (or restart the bridge).")
+            return
+
         if self.waypoint_idx >= len(self.path):
             self._publish_cmd_vel(0.0, 0.0)
             self.path_goal_reached = True
@@ -357,7 +356,40 @@ class RunnerNode(Node):
             ang = 0.5 if angle_err > 0 else -0.5
             self._publish_cmd_vel(0.0, ang)
         else:
+            # GUARD 2: the cell just ahead is wall/void -> don't step into it.
+            ahead_x = rx + FORWARD_LOOKAHEAD_M * math.cos(ryaw)
+            ahead_y = ry + FORWARD_LOOKAHEAD_M * math.sin(ryaw)
+            if not self._is_free_world(ahead_x, ahead_y):
+                self._publish_cmd_vel(0.0, 0.0)
+                self._log_throttled(
+                    "blocked",
+                    f"🚧 Blocked: cell {FORWARD_LOOKAHEAD_M:.2f} m ahead of "
+                    f"({rx:.2f},{ry:.2f}) is not free. Not driving forward.")
+                return
             self._publish_cmd_vel(0.3, 0.5 * angle_err)
+
+    # ── Keep-inside-the-room guard ───────────────────────────────────────────
+
+    def _is_free_world(self, x: float, y: float) -> bool:
+        """True if world point (x, y) is a free cell on the map.
+        Out-of-bounds counts as NOT free (that is the black void outside the room).
+        Uses the same origin/resolution as publish_map(), so it matches /map."""
+        if self.mfm is None or self.mfm.map is None:
+            return True  # map not loaded yet: don't block anything
+        grid = self.mfm.map
+        H, W = grid.shape
+        col = int(x / MAP_RESOLUTION + W / 2.0)
+        row = int(y / MAP_RESOLUTION + H / 2.0)
+        if not (0 <= row < H and 0 <= col < W):
+            return False
+        return grid[row, col] == 1
+
+    def _log_throttled(self, key: str, text: str, period: float = 1.0):
+        now = time.time()
+        last = getattr(self, "_last_log_" + key, 0.0)
+        if now - last > period:
+            print(text, flush=True)
+            setattr(self, "_last_log_" + key, now)
 
     @staticmethod
     def _wrap_angle(a):

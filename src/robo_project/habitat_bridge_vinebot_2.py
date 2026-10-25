@@ -72,6 +72,23 @@ class VinebotHabitatBridge(Node):
         cfg = habitat_sim.Configuration(backend_cfg, [agent_cfg])
         return habitat_sim.Simulator(cfg)
 
+    # Navmesh heights above this are NOT the floor (desks ~0.8-1.0 m, wall tops
+    # / roof ~3.0-3.2 m in IMR_lab8.glb; the floor is at ~0.2 m).
+    FLOOR_MAX_Y = 0.5
+
+    def _random_floor_point(self, current_position):
+        """Random navigable point at FLOOR height. Falls back to the nearest
+        navigable point to the current position if none is found."""
+        pf = self.sim.pathfinder
+        for _ in range(500):
+            p = pf.get_random_navigable_point()
+            if float(p[1]) <= self.FLOOR_MAX_Y:
+                return p
+        self.get_logger().warn(
+            "No floor-level random point found in 500 tries — using snap_point instead.")
+        snapped = pf.snap_point(current_position)
+        return snapped if snapped is not None else current_position
+
     def cmd_vel_callback(self, msg):
         # FIX: previous if/elif chain meant that whenever linear.x > 0.01,
         # angular.z was NEVER checked that same tick even if also nonzero.
@@ -124,7 +141,14 @@ class VinebotHabitatBridge(Node):
                     # anywhere in the scene, which should land in a much
                     # larger, more open area instead of the same dead end.
                     if self._snap_attempts >= 3:
-                        random_point = self.sim.pathfinder.get_random_navigable_point()
+                        # FIX: the navmesh also has surfaces at desk height and
+                        # wall-top/roof height (check_navmesh.py: 66.8% of
+                        # sampled points had no path from the floor). A plain
+                        # get_random_navigable_point() can drop the robot on
+                        # one of those, which is how the cameras ended up
+                        # looking at a black void above the walls. Only accept
+                        # points at floor level.
+                        random_point = self._random_floor_point(state.position)
                         state.position = random_point
                         self.get_logger().warn(
                             f"Nearest-point recovery failed {self._snap_attempts} times — "
