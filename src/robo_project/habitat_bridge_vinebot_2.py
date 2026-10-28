@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist, TransformStamped
 from nav_msgs.msg import Odometry
@@ -11,19 +12,69 @@ from cv_bridge import CvBridge
 import habitat_sim
 import numpy as np
 import cv2
+import math
 import os
+import threading
+import time
 from pathlib import Path
 
 # --- STRICT PATH SETUP FOR ENVIRONMENT FOLDER ---
 SCRIPT_DIR = Path(__file__).resolve().parent
-ENVIRONMENT_DIR = SCRIPT_DIR.parent.parent / "src" / "environment" 
+ENVIRONMENT_DIR = SCRIPT_DIR.parent.parent / "src" / "environment"
 MODEL_PATH = str(ENVIRONMENT_DIR / "IMR_lab8.glb")
+
+# ── Frame convention ─────────────────────────────────────────────────────────
+# Habitat is Y-up: the floor is the X/Z plane and the agent looks along -Z
+# when its yaw (rotation about +Y) is 0.  ROS (REP-103) is Z-up and
+# right-handed, so the ROS odom frame used here is:
+#
+#     ros_x   =  habitat_X
+#     ros_y   = -habitat_Z
+#     ros_yaw =  habitat_yaw + pi/2
+#
+# With this, "forward" in Habitat is exactly the direction of ros_yaw, and a
+# positive angular.z (turn left) increases ros_yaw - which is what
+# runner_node's path follower assumes.  (Publishing y = +Z and yaw = habitat
+# yaw made the reported heading 90-180 deg off the real driving direction.)
+YAW_OFFSET = math.pi / 2
+
+# Default spawn, in the ROS map/odom frame.  A point inside the main room that
+# is free on the sketch map AND on the Habitat navmesh (>0.5 m from obstacles).
+DEFAULT_START_X = -4.1
+DEFAULT_START_Y = 4.9
+DEFAULT_START_YAW = 0.0
+
+CMD_VEL_TIMEOUT = 0.5   # s - stop if no /cmd_vel arrives for this long
+MAX_DT = 0.2            # s - cap one integration step (e.g. after a slow render)
+
+
+def habitat_to_ros(position, habitat_yaw):
+    return float(position[0]), float(-position[2]), wrap_angle(habitat_yaw + YAW_OFFSET)
+
+
+def wrap_angle(a):
+    return math.atan2(math.sin(a), math.cos(a))
+
+
+def habitat_yaw_of(rotation):
+    """Yaw about +Y of a Habitat agent rotation (numpy-quaternion)."""
+    return 2.0 * math.atan2(float(rotation.y), float(rotation.w))
+
 
 class VinebotHabitatBridge(Node):
     def __init__(self):
         super().__init__('habitat_bridge')
         self.cv_bridge = CvBridge()
-        
+
+        self.declare_parameter('start_x', DEFAULT_START_X)
+        self.declare_parameter('start_y', DEFAULT_START_Y)
+        self.declare_parameter('start_yaw', DEFAULT_START_YAW)
+        # -1 = no CUDA device (software / Mesa rendering, e.g. a VM or headless box)
+        self.declare_parameter('gpu_device_id', 0)
+        # Show the 4-camera OpenCV window (also gives WASD teleop)
+        self.declare_parameter('show_window', True)
+        self.show_window = self.get_parameter('show_window').value
+
         self.get_logger().info(f"📂 Loading Habitat 3D Scene Model from: {MODEL_PATH}")
 
         # Camera Publishers
@@ -31,12 +82,19 @@ class VinebotHabitatBridge(Node):
         self.pub_right = self.create_publisher(Image, '/camera/right/image_raw', 10)
         self.pub_back  = self.create_publisher(Image, '/camera/back/image_raw', 10)
         self.pub_left  = self.create_publisher(Image, '/camera/left/image_raw', 10)
-        
+
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
-        
+
         # TF Broadcaster to move the robot in RViz
         self.tf_broadcaster = TransformBroadcaster(self)
-        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
+        # Queue depth 1: only the newest velocity command matters.
+        # ROS callbacks are spun on a background thread (see main()), so a new
+        # command is stored immediately; the simulator itself runs in run_loop()
+        # on the main thread (its OpenGL context belongs to that thread).  With
+        # ROS timers driving the simulator, the always-overdue timers were served
+        # before /cmd_vel and commands reached the robot ~1 s late, which made
+        # the path follower overshoot.
+        self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 1)
 
         # File Existence Check
         if not os.path.exists(MODEL_PATH):
@@ -45,19 +103,40 @@ class VinebotHabitatBridge(Node):
 
         self.sim = self.setup_habitat()
         self.agent = self.sim.initialize_agent(0)
+        self.place_agent_at_start()
 
-        self._stuck_count = 0
+        # Latest velocity command; integrated continuously in motion_callback.
+        self.cmd_lin = 0.0
+        self.cmd_ang = 0.0
+        self.last_cmd_time = 0.0
+        self.last_motion_time = time.monotonic()
+        self._blocked_since = None
 
-        self.create_timer(0.1, self.timer_callback)
         self.get_logger().info("✅ Habitat Bridge fully initialized with IMR Lab 8.")
+
+    MOTION_PERIOD = 0.02   # s - motion + /odom + TF
+    CAMERA_PERIOD = 0.1    # s - camera images (+ preview window)
+
+    def run_loop(self):
+        """Simulator loop on the main thread: motion every MOTION_PERIOD, cameras
+        every CAMERA_PERIOD."""
+        next_camera = time.monotonic()
+        while rclpy.ok():
+            start = time.monotonic()
+            self.motion_callback()
+            if start >= next_camera:
+                self.timer_callback()
+                next_camera = start + self.CAMERA_PERIOD
+            time.sleep(max(0.0, self.MOTION_PERIOD - (time.monotonic() - start)))
 
     def setup_habitat(self):
         backend_cfg = habitat_sim.SimulatorConfiguration()
         backend_cfg.scene_id = MODEL_PATH
-        
+        backend_cfg.gpu_device_id = int(self.get_parameter('gpu_device_id').value)
+
         agent_cfg = habitat_sim.agent.AgentConfiguration()
         agent_cfg.height = 0.6
-        
+
         sensors = []
         for name, orientation in [("front", 0.0), ("right", -1.5708), ("back", 3.14159), ("left", 1.5708)]:
             cam = habitat_sim.CameraSensorSpec()
@@ -68,7 +147,7 @@ class VinebotHabitatBridge(Node):
             cam.orientation = [0.0, orientation, 0.0]
             sensors.append(cam)
         agent_cfg.sensor_specifications = sensors
-        
+
         cfg = habitat_sim.Configuration(backend_cfg, [agent_cfg])
         return habitat_sim.Simulator(cfg)
 
@@ -89,89 +168,99 @@ class VinebotHabitatBridge(Node):
         snapped = pf.snap_point(current_position)
         return snapped if snapped is not None else current_position
 
+    def place_agent_at_start(self):
+        """Put the agent at (start_x, start_y, start_yaw) given in the ROS frame,
+        snapped onto the floor navmesh (habitat's default spawn is random and
+        landed in a pocket of the map that is walled off on the sketch)."""
+        x = float(self.get_parameter('start_x').value)
+        y = float(self.get_parameter('start_y').value)
+        yaw = float(self.get_parameter('start_yaw').value)
+
+        state = self.agent.get_state()
+        wanted = np.array([x, float(state.position[1]), -y], dtype=np.float32)
+        snapped = self.sim.pathfinder.snap_point(wanted)
+        if snapped is None or np.isnan(snapped).any() or float(snapped[1]) > self.FLOOR_MAX_Y:
+            self.get_logger().warn(f"Start ({x:.2f},{y:.2f}) is not on the floor navmesh — using a random floor point.")
+            snapped = self._random_floor_point(state.position)
+        state.position = snapped
+        state.rotation = habitat_sim.utils.common.quat_from_angle_axis(
+            yaw - YAW_OFFSET, np.array([0.0, 1.0, 0.0], dtype=np.float32))
+        self.agent.set_state(state)
+        rx, ry, ryaw = habitat_to_ros(snapped, yaw - YAW_OFFSET)
+        self.get_logger().info(f"🤖 Robot spawned at x={rx:.2f} y={ry:.2f} yaw={math.degrees(ryaw):.0f}°")
+
     def cmd_vel_callback(self, msg):
-        # FIX: previous if/elif chain meant that whenever linear.x > 0.01,
-        # angular.z was NEVER checked that same tick even if also nonzero.
-        # runner_node.py sends combined linear+angular for course
-        # correction while approaching a waypoint — that steering signal
-        # was being silently dropped every time the robot moved forward.
-        # Now angular is applied independently so steering-while-driving
-        # actually works.
-        if abs(msg.angular.z) > 0.01:
-            if msg.angular.z > 0:
-                self.agent.act("turn_left")
+        # Velocities are integrated over time in motion_callback (continuous
+        # motion), instead of one fixed 0.25 m / 10 deg Habitat action per
+        # message, which made the robot jump past waypoints and oscillate.
+        self.cmd_lin = float(msg.linear.x)
+        self.cmd_ang = float(msg.angular.z)
+        self.last_cmd_time = time.monotonic()
+
+    def motion_callback(self):
+        now = time.monotonic()
+        dt = min(now - self.last_motion_time, MAX_DT)
+        self.last_motion_time = now
+
+        if now - self.last_cmd_time > CMD_VEL_TIMEOUT:
+            self.cmd_lin = 0.0
+            self.cmd_ang = 0.0
+
+        state = self.agent.get_state()
+        habitat_yaw = habitat_yaw_of(state.rotation)
+
+        if self.cmd_lin != 0.0 or self.cmd_ang != 0.0:
+            habitat_yaw += self.cmd_ang * dt
+            start = np.array(state.position, dtype=np.float32)
+            fwd = self.cmd_lin * dt
+            # Habitat forward for yaw t is (-sin t, 0, -cos t)
+            target = start + np.array([-math.sin(habitat_yaw) * fwd, 0.0, -math.cos(habitat_yaw) * fwd],
+                                      dtype=np.float32)
+            # try_step keeps the agent on the navmesh (slides along walls).
+            new_pos = self.sim.pathfinder.try_step(start, target)
+            state.position = new_pos
+            state.rotation = habitat_sim.utils.common.quat_from_angle_axis(
+                habitat_yaw, np.array([0.0, 1.0, 0.0], dtype=np.float32))
+            self.agent.set_state(state)
+
+            moved = float(np.linalg.norm(np.asarray(new_pos) - start))
+            if abs(fwd) > 1e-4 and moved < 0.2 * abs(fwd):
+                if self._blocked_since is None:
+                    self._blocked_since = now
+                elif now - self._blocked_since > 2.0:
+                    self.get_logger().warn("🚧 Driving forward but blocked by the navmesh (wall/obstacle in Habitat).")
+                    self._blocked_since = now
             else:
-                self.agent.act("turn_right")
+                self._blocked_since = None
 
-        if msg.linear.x > 0.01:
-            pos_before = self.agent.get_state().position.copy()
-            self.agent.act("move_forward")
-            pos_after = self.agent.get_state().position
-            moved = float(np.linalg.norm(pos_after - pos_before))
+        self.publish_odom(state.position, habitat_yaw)
 
-            if moved < 0.01:
-                self._stuck_count += 1
-                if self._stuck_count == 1 or self._stuck_count % 20 == 0:
-                    self.get_logger().warn(
-                        f"move_forward rejected near navmesh boundary "
-                        f"(stuck_count={self._stuck_count})")
+    def publish_odom(self, position, habitat_yaw):
+        x, y, yaw = habitat_to_ros(position, habitat_yaw)
 
-                # FIX: repeated turn_left/turn_right nudging was CONFIRMED
-                # ineffective by logs — stuck_count climbed past 2000 over
-                # 7+ minutes with ZERO successful recoveries (alternating
-                # turns cancel each other's net rotation out to ~zero).
-                # Instead, after a short grace period, directly snap the
-                # agent to the nearest genuinely navigable point using
-                # Habitat's own pathfinder — the same tool that reliably
-                # detects navigability elsewhere in this project. This is
-                # a hard, guaranteed-correct recovery instead of an
-                # unreliable incremental nudge.
-                if self._stuck_count >= 10:
-                    self._snap_attempts = getattr(self, '_snap_attempts', 0) + 1
-                    state = self.agent.get_state()
+        odom_msg = Odometry()
+        odom_msg.header.stamp = self.get_clock().now().to_msg()
+        odom_msg.header.frame_id = "odom"
+        odom_msg.child_frame_id = "base_footprint"
+        odom_msg.pose.pose.position.x = x
+        odom_msg.pose.pose.position.y = y
+        odom_msg.pose.pose.position.z = 0.0
+        odom_msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        odom_msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        odom_msg.twist.twist.linear.x = self.cmd_lin
+        odom_msg.twist.twist.angular.z = self.cmd_ang
+        self.odom_pub.publish(odom_msg)
 
-                    # FIX: repeated snap-to-NEAREST-point kept returning
-                    # the SAME coordinates every time (confirmed by logs),
-                    # because the agent stays trapped in a tiny isolated
-                    # navmesh pocket where snap_point() always finds this
-                    # same pocket as "nearest", regardless of random
-                    # rotation — the agent never successfully moves out.
-                    # After 3 failed snap-to-nearest attempts in a row,
-                    # escalate to a genuinely RANDOM navigable point
-                    # anywhere in the scene, which should land in a much
-                    # larger, more open area instead of the same dead end.
-                    if self._snap_attempts >= 3:
-                        # FIX: the navmesh also has surfaces at desk height and
-                        # wall-top/roof height (check_navmesh.py: 66.8% of
-                        # sampled points had no path from the floor). A plain
-                        # get_random_navigable_point() can drop the robot on
-                        # one of those, which is how the cameras ended up
-                        # looking at a black void above the walls. Only accept
-                        # points at floor level.
-                        random_point = self._random_floor_point(state.position)
-                        state.position = random_point
-                        self.get_logger().warn(
-                            f"Nearest-point recovery failed {self._snap_attempts} times — "
-                            f"escalating to random navigable point: {random_point}")
-                        self._snap_attempts = 0
-                    else:
-                        snapped = self.sim.pathfinder.snap_point(state.position)
-                        if snapped is not None:
-                            state.position = snapped
-                        self.get_logger().warn(
-                            f"Stuck for {self._stuck_count} attempts — "
-                            f"snapped agent to nearest navigable point: {state.position}")
-
-                    random_yaw_deg = float(np.random.uniform(0, 360))
-                    state.rotation = habitat_sim.utils.common.quat_from_angle_axis(
-                        np.deg2rad(random_yaw_deg),
-                        np.array([0.0, 1.0, 0.0], dtype=np.float32))
-                    self.agent.set_state(state)
-                    self._stuck_count = 0
-            else:
-                self._stuck_count = 0
-        elif msg.linear.x < -0.01:
-            self.agent.act("move_backward")
+        # Broadcast the exact same pose to the TF Tree for RViz
+        t = TransformStamped()
+        t.header.stamp = odom_msg.header.stamp
+        t.header.frame_id = 'odom'
+        t.child_frame_id = 'base_footprint'
+        t.transform.translation.x = x
+        t.transform.translation.y = y
+        t.transform.translation.z = 0.0
+        t.transform.rotation = odom_msg.pose.pose.orientation
+        self.tf_broadcaster.sendTransform(t)
 
     def add_label(self, img, text):
         out = img.copy()
@@ -181,69 +270,42 @@ class VinebotHabitatBridge(Node):
 
     def timer_callback(self):
         obs = self.sim.get_sensor_observations()
-        
+
         for name in ["front", "right", "back", "left"]:
             if name in obs:
                 pub = getattr(self, f"pub_{name}")
                 # Convert Habitat RGB matrix to standard ROS 2 BGR image message
                 bgr_img = cv2.cvtColor(obs[name][:, :, :3], cv2.COLOR_RGB2BGR)
                 pub.publish(self.cv_bridge.cv2_to_imgmsg(bgr_img, "bgr8"))
-        
-        if "front" in obs:
+
+        if self.show_window and "front" in obs:
             f = cv2.cvtColor(obs["front"][:, :, :3], cv2.COLOR_RGB2BGR)
             r = cv2.cvtColor(obs["right"][:, :, :3], cv2.COLOR_RGB2BGR)
             b = cv2.cvtColor(obs["back"][:, :, :3], cv2.COLOR_RGB2BGR)
             l = cv2.cvtColor(obs["left"][:, :, :3], cv2.COLOR_RGB2BGR)
-            
+
             top = np.hstack([self.add_label(f, "Front"), self.add_label(l, "Left")])
             bot = np.hstack([self.add_label(r, "Right"), self.add_label(b, "Back")])
             grid = np.vstack([top, bot])
             cv2.imshow('Habitat IMR_Lab8 Live Cameras', grid)
-            
+
+            # WASD teleop: same as a short /cmd_vel burst
             key = cv2.waitKey(1) & 0xFF
-            if key == ord("w"): self.agent.act("move_forward")
-            elif key == ord("s"): self.agent.act("move_backward")
-            elif key == ord("a"): self.agent.act("turn_left")
-            elif key == ord("d"): self.agent.act("turn_right")
+            teleop = {ord("w"): (0.5, 0.0), ord("s"): (-0.5, 0.0),
+                      ord("a"): (0.0, 1.0), ord("d"): (0.0, -1.0)}
+            if key in teleop:
+                self.cmd_lin, self.cmd_ang = teleop[key]
+                self.last_cmd_time = time.monotonic()
 
-        # Pose & Transform Extraction
-        state = self.agent.get_state()
-        
-        odom_msg = Odometry()
-        odom_msg.header.stamp = self.get_clock().now().to_msg()
-        odom_msg.header.frame_id = "odom"
-        odom_msg.child_frame_id = "base_footprint"
-        
-        odom_msg.pose.pose.position.x = float(state.position[0])
-        odom_msg.pose.pose.position.y = float(state.position[2])
-        odom_msg.pose.pose.position.z = 0.0
-        
-        # Extract true rotation
-        try:
-            odom_msg.pose.pose.orientation.z = float(state.rotation.vector.y)
-            odom_msg.pose.pose.orientation.w = float(state.rotation.scalar)
-        except AttributeError:
-            odom_msg.pose.pose.orientation.z = float(state.rotation.y)
-            odom_msg.pose.pose.orientation.w = float(state.rotation.w)
-            
-        self.odom_pub.publish(odom_msg)
-
-        # Broadcast the exact same pose to the TF Tree for RViz
-        t = TransformStamped()
-        t.header.stamp = odom_msg.header.stamp
-        t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_footprint'
-        t.transform.translation.x = odom_msg.pose.pose.position.x
-        t.transform.translation.y = odom_msg.pose.pose.position.y
-        t.transform.translation.z = 0.0
-        t.transform.rotation = odom_msg.pose.pose.orientation
-        self.tf_broadcaster.sendTransform(t)
 
 def main(args=None):
     rclpy.init(args=args)
     bridge = VinebotHabitatBridge()
+    executor = SingleThreadedExecutor()
+    executor.add_node(bridge)
+    threading.Thread(target=executor.spin, daemon=True).start()   # /cmd_vel callbacks
     try:
-        rclpy.spin(bridge)
+        bridge.run_loop()
     except KeyboardInterrupt:
         pass
     finally:
@@ -253,3 +315,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+

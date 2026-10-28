@@ -45,3 +45,64 @@ ros2 run robo_project motion_planner
 
 
 
+
+
+
+
+
+Run order: build once -> Habitat -> robot model -> RViz -> runner (map) -> motion planner (path).
+Wait for each step's "ready" line before starting the next one.
+
+terminal 1  (build once - do NOT rebuild while the other terminals are running)
+
+conda activate habitat
+cd ~/robo_project_ws
+rm -rf build install log
+colcon build --packages-select robo_project vinebot_description
+source install/setup.bash
+
+terminal 2  (Habitat)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+python3 src/robo_project/habitat_bridge_vinebot_2.py
+# ready when: "Robot spawned at x=-4.10 y=4.90" and "Habitat Bridge fully initialized"
+# options:  --ros-args -p start_x:=-4.1 -p start_y:=4.9 -p start_yaw:=0.0
+#           -p gpu_device_id:=-1    (no NVIDIA GPU / VM: software rendering)
+#           -p show_window:=false   (no camera window)
+
+terminal 3  (robot model)
+
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 launch vinebot_description robot_launch.py
+
+terminal 4  (RViz: map, robot, planned path, goal, current waypoint)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+rviz2 -d src/vinebot_description/config/display_vinebot.rviz
+
+terminal 5  (runner: publishes /map + follows /planned_path)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 run robo_project runner_node
+# ready when: "MAP BROADCAST SUCCESSFUL! Check RViz now."  -> map appears in RViz
+
+terminal 6  (motion planner: A* from the robot to the goal)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 run robo_project motion_planner
+# plans to GOAL_X/GOAL_Y (0,0) at start; the robot drives it in Habitat and RViz.
+# Click "2D Goal Pose" in RViz to send a new goal - it re-plans from the current pose.
+# If the robot gets stuck on something that is not on the sketch, runner_node
+# reports it on /blocked_point and motion_planner re-plans around it.
+
+
+

@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 
 import math
+import cv2
 import numpy as np
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PointStamped
 from nav_msgs.msg import Path, OccupancyGrid, Odometry
 
 from robo_project.scripts.astar import Astar
 from robo_project.scripts.basic_types import PosePixels
 
 # ── GOAL in world coordinates (meters) ───────────────────────────────────────
-GOAL_X = 0.0   # meters
+GOAL_X = 0.0   # meters  (default goal; a "2D Goal Pose" clicked in RViz replaces it)
 GOAL_Y = 0.0   # meters
+
+# Walls are grown by this much before planning, so the path keeps the robot
+# body away from them instead of hugging the wall line.
+INFLATION_M = 0.20
+
+# Obstacles reported by runner_node on /blocked_point (things that exist in
+# Habitat but not on the hand-drawn map) are added as discs of this radius.
+BLOCKED_RADIUS_M = 0.25
 
 
 class MotionPlanner(Node):
@@ -45,6 +54,13 @@ class MotionPlanner(Node):
         self.robot_y = None
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
 
+        self.goal_x = GOAL_X
+        self.goal_y = GOAL_Y
+        self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
+
+        self.blocked_points = []
+        self.create_subscription(PointStamped, '/blocked_point', self.blocked_callback, 10)
+
         self.planned = False
         self.last_path_msg = None
         self.goal_msg = self._build_goal_msg()
@@ -59,8 +75,8 @@ class MotionPlanner(Node):
         msg = PoseStamped()
         msg.header.frame_id = 'map'
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.pose.position.x = GOAL_X
-        msg.pose.position.y = GOAL_Y
+        msg.pose.position.x = self.goal_x
+        msg.pose.position.y = self.goal_y
         msg.pose.orientation.w = 1.0
         return msg
 
@@ -84,6 +100,23 @@ class MotionPlanner(Node):
     def odom_callback(self, msg: Odometry):
         self.robot_x = float(msg.pose.pose.position.x)
         self.robot_y = float(msg.pose.pose.position.y)
+
+    def goal_callback(self, msg: PoseStamped):
+        self.goal_x = float(msg.pose.position.x)
+        self.goal_y = float(msg.pose.position.y)
+        self.get_logger().info(f"New goal from RViz: x={self.goal_x:.2f}m, y={self.goal_y:.2f}m. Re-planning.")
+        self.goal_msg = self._build_goal_msg()
+        self.goal_pub.publish(self.goal_msg)
+        self.last_path_msg = None  # don't republish the old path meanwhile
+        self.planned = False  # try_plan() runs A* again from the current pose
+
+    def blocked_callback(self, msg: PointStamped):
+        self.blocked_points.append((float(msg.point.x), float(msg.point.y)))
+        self.get_logger().warn(
+            f"Obstacle reported at ({msg.point.x:.2f},{msg.point.y:.2f}) "
+            f"[{len(self.blocked_points)} total]. Re-planning from the current pose.")
+        self.last_path_msg = None
+        self.planned = False
 
     # ── Coordinate conversion ────────────────────────────────────────────────
     # Uses the resolution/origin actually published in /map — never
@@ -121,21 +154,27 @@ class MotionPlanner(Node):
 
     def run_astar_and_publish(self):
         start_row, start_col = self.world_to_pixel(self.robot_x, self.robot_y)
-        goal_row, goal_col = self.world_to_pixel(GOAL_X, GOAL_Y)
+        goal_row, goal_col = self.world_to_pixel(self.goal_x, self.goal_y)
 
         self.get_logger().info(
             f"Start: world=({self.robot_x:.2f},{self.robot_y:.2f}) "
             f"-> pixel=({start_row},{start_col}) "
             f"value={self.grid[start_row, start_col]}")
         self.get_logger().info(
-            f"Goal:  world=({GOAL_X:.2f},{GOAL_Y:.2f}) "
+            f"Goal:  world=({self.goal_x:.2f},{self.goal_y:.2f}) "
             f"-> pixel=({goal_row},{goal_col}) "
             f"value={self.grid[goal_row, goal_col]}")
 
-        # Raw /map data used directly — no transformation.
-        # in_collision() checks value==0, and this map already has
-        # wall=0, free=100, matching perfectly (see module docstring).
-        astar_map = self.grid
+        # /map uses the ROS convention (0 = free, 100 = wall, -1 = unknown);
+        # A* wants 1 = free, 0 = wall.  Grow the walls by INFLATION_M.
+        free = (self.grid == 0).astype(np.uint8)
+        b_px = int(round(BLOCKED_RADIUS_M / self.map_resolution))
+        for bx, by in self.blocked_points:
+            b_row, b_col = self.world_to_pixel(bx, by)
+            cv2.circle(free, (b_col, b_row), b_px, 0, -1)
+        r_px = max(1, int(round(INFLATION_M / self.map_resolution)))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r_px + 1, 2 * r_px + 1))
+        astar_map = cv2.erode(free, kernel)
 
         start_row, start_col = self._snap_to_free(astar_map, start_row, start_col)
         goal_row, goal_col = self._snap_to_free(astar_map, goal_row, goal_col)
@@ -151,15 +190,18 @@ class MotionPlanner(Node):
 
         if not path:
             self.get_logger().error(
-                "A* found NO PATH. Check GOAL_X/GOAL_Y are in free space.")
+                "A* found NO PATH between start and goal (they are not connected on the inflated map).")
             return
 
-        # astar_simple.run_astar returns the path REVERSED (goal->start),
-        # with no smoothing (dense, one waypoint per grid cell) — this
-        # matches the original ROS1 logic exactly, unchanged.
-        waypoints_px = list(reversed(path))  # start -> goal order
+        # run_astar returns the path REVERSED (goal->start), one cell per
+        # step.  smooth_path() keeps only the corners that are needed
+        # (line-of-sight on the inflated map), so the robot drives straight
+        # segments instead of a 2 cm staircase.
+        smoothed = planner.smooth_path(path)
+        waypoints_px = list(reversed(smoothed))  # start -> goal order
 
-        self.get_logger().info(f"Path found: {len(waypoints_px)} waypoints")
+        self.get_logger().info(
+            f"Path found: {len(path)} cells, smoothed to {len(waypoints_px)} waypoints")
 
         msg = Path()
         msg.header.frame_id = 'map'
@@ -211,3 +253,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
