@@ -293,6 +293,74 @@ Visualization Manager:
         Value: /map_updates
       Use Timestamp: false
       Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 0; 255
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.05000000074505806
+      Name: Planned Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0.05000000074505806
+      Pose Color: 255; 85; 255
+      Pose Style: Points
+      Radius: 0.07000000029802322
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /planned_path
+      Value: true
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.10000000149011612
+      Class: rviz_default_plugins/Pose
+      Color: 0; 200; 0
+      Enabled: true
+      Head Length: 0.30000001192092896
+      Head Radius: 0.15000000596046448
+      Name: Goal
+      Shaft Length: 0.5
+      Shaft Radius: 0.07000000029802322
+      Shape: Arrow
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /motion_planner_goal
+      Value: true
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.10000000149011612
+      Class: rviz_default_plugins/Pose
+      Color: 255; 170; 0
+      Enabled: true
+      Head Length: 0.20000000298023224
+      Head Radius: 0.10000000149011612
+      Name: Current Waypoint
+      Shaft Length: 0.30000001192092896
+      Shaft Radius: 0.05000000074505806
+      Shape: Arrow
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /runner_current_waypoint
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -348,11 +416,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 24.083919525146484
+      Scale: 45
       Target Frame: <Fixed Frame>
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 1.144243836402893
-      Y: 0.47693362832069397
+      X: 0
+      Y: 0
     Saved:
       - Angle: 0
         Class: rviz_default_plugins/TopDownOrtho
@@ -432,3 +500,4 @@ Window Geometry:
   Width: 1120
   X: 389
   Y: 199
+
