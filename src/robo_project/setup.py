@@ -67,7 +67,9 @@ setup(
             'simple_runner = robo_project.simple_runner:main',
             'motion_planner = robo_project.motion_planner:main',
             'check_map_vs_habitat = robo_project.check_map_vs_habitat:main',
-             'check_connectivity = robo_project.check_connectivity:main',
+            'check_connectivity = robo_project.check_connectivity:main',
+            'show_1 = robo_project.show_1:main',
+            'show_path_only = robo_project.show_path_only:main',
         ],
     },
 )
