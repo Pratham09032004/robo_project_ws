@@ -106,3 +106,48 @@ ros2 run robo_project motion_planner
 
 
 
+
+
+
+=====================================================================
+CMN MODE: ML local occupancy + localization on the sketch (no ground-truth pose)
+=====================================================================
+The planner/runner are the same, but their /odom is remapped to /cmn/odom:
+the robot first finds itself on the hand-drawn map, then plans and drives.
+Extra Python deps in the habitat env:  pip install torch opencv-python
+
+terminal 1  (build once)
+
+conda activate habitat
+cd ~/robo_project_ws
+colcon build --packages-select robo_project vinebot_description
+source install/setup.bash
+
+terminal 2  (Habitat - any spawn point, the robot is NOT told where it is)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+python3 src/robo_project/habitat_bridge_vinebot_2.py --ros-args -p start_x:=3.5 -p start_y:=4.5
+
+terminal 3  (robot model)           ros2 launch vinebot_description robot_launch.py
+terminal 4  (RViz)                  rviz2 -d src/vinebot_description/config/display_vinebot.rviz
+    add displays:  Map /cmn/belief (color scheme "costmap"),  Map /cmn/local_occ,
+                   PoseWithCovariance /cmn/pose
+
+terminal 5  (runner + ML + localization + planner, all remapped)
+
+conda activate habitat
+cd ~/robo_project_ws
+source install/setup.bash
+ros2 launch robo_project cmn.launch.py
+# add  log_gt_error:=true  to also print the error vs the Habitat pose (evaluation only)
+# the robot explores until "LOCALIZED after N updates", then motion_planner plans
+# from the estimated pose to the goal and runner_node drives it.
+
+Re-train the local occupancy model (optional)
+
+conda activate habitat
+python src/robo_project/cmn_nav/generate_dataset.py --scene src/environment/IMR_lab8.glb --samples 10000 --out data/imr_lab8.npz
+python src/robo_project/cmn_nav/generate_dataset.py --scene src/environment/Denmark.glb --samples 4000 --out data/denmark.npz
+python src/robo_project/cmn_nav/train.py --data data/imr_lab8.npz data/denmark.npz --out src/robo_project/ml_runs/cmn_local_occ.pth

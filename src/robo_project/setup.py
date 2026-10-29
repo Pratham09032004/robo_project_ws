@@ -13,7 +13,7 @@ def generate_data_files():
     ]
 
     # Include config files and CMN scripts recursively in the installed share folder.
-    dirs_to_include = ['config', 'scripts']
+    dirs_to_include = ['config', 'scripts', 'ml_runs']
 
     for directory in dirs_to_include:
         if not os.path.isdir(directory):
@@ -66,6 +66,10 @@ setup(
             
             'simple_runner = robo_project.simple_runner:main',
             'motion_planner = robo_project.motion_planner:main',
+
+            # Coarse Map Navigator: ML local occupancy + Bayes-filter localization
+            'local_occ_node = robo_project.cmn_nav.local_occ_node:main',
+            'cmn_localization_node = robo_project.cmn_nav.localization_node:main',
             'check_map_vs_habitat = robo_project.check_map_vs_habitat:main',
              'check_connectivity = robo_project.check_connectivity:main',
         ],
